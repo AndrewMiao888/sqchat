@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import type { ChatMessage, ChatSettings, ChatState, Person } from '#shared/types/chat'
 import { DEFAULT_SETTINGS, PEOPLE } from '#shared/types/chat'
+import { publishLocalChange } from './realtime'
 
 const dataPath = join(process.cwd(), '.data', 'chat.json')
 let localQueue: Promise<unknown> = Promise.resolve()
@@ -109,58 +110,77 @@ export async function addMessage(sender: Person, body: string): Promise<ChatMess
   const message: ChatMessage = { id: randomUUID(), sender, body, createdAt: new Date().toISOString() }
   const db = await database()
   if (db) {
-    const rows = await db`INSERT INTO chat_messages (id, sender, body, created_at)
+    const rows = await db`WITH changed AS (
+      INSERT INTO chat_messages (id, sender, body, created_at)
       VALUES (${message.id}, ${sender}, ${body}, ${message.createdAt})
-      RETURNING id, sender, body, created_at, edited_at`
+      RETURNING id, sender, body, created_at, edited_at
+    ), signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed)
+    SELECT changed.* FROM changed CROSS JOIN signal`
     return toMessage(rows[0])
   }
-  return mutateLocal(state => {
+  const saved = await mutateLocal(state => {
     state.messages.push(message)
     state.messages = state.messages.slice(-200)
     return message
   })
+  publishLocalChange()
+  return saved
 }
 
 export async function updateMessage(id: string, body: string): Promise<ChatMessage | null> {
   const db = await database()
   if (db) {
-    const rows = await db`UPDATE chat_messages SET body = ${body}, edited_at = NOW()
-      WHERE id = ${id} RETURNING id, sender, body, created_at, edited_at`
+    const rows = await db`WITH changed AS (
+      UPDATE chat_messages SET body = ${body}, edited_at = NOW()
+      WHERE id = ${id} RETURNING id, sender, body, created_at, edited_at
+    ), signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed)
+    SELECT changed.* FROM changed CROSS JOIN signal`
     return rows[0] ? toMessage(rows[0]) : null
   }
-  return mutateLocal(state => {
+  const saved = await mutateLocal(state => {
     const message = state.messages.find(item => item.id === id)
     if (!message) return null
     message.body = body
     message.editedAt = new Date().toISOString()
     return message
   })
+  if (saved) publishLocalChange()
+  return saved
 }
 
 export async function deleteMessage(id: string): Promise<boolean> {
   const db = await database()
   if (db) {
-    const rows = await db`DELETE FROM chat_messages WHERE id = ${id} RETURNING id`
+    const rows = await db`WITH changed AS (
+      DELETE FROM chat_messages WHERE id = ${id} RETURNING id
+    ), signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed)
+    SELECT changed.id FROM changed CROSS JOIN signal`
     return rows.length > 0
   }
-  return mutateLocal(state => {
+  const removed = await mutateLocal(state => {
     const length = state.messages.length
     state.messages = state.messages.filter(message => message.id !== id)
     return state.messages.length !== length
   })
+  if (removed) publishLocalChange()
+  return removed
 }
 
 export async function updateSettings(settings: ChatSettings): Promise<ChatSettings> {
   const db = await database()
   if (db) {
-    await db`INSERT INTO chat_settings (id, data) VALUES (TRUE, ${JSON.stringify(settings)}::jsonb)
-      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`
+    await db`WITH changed AS (
+      INSERT INTO chat_settings (id, data) VALUES (TRUE, ${JSON.stringify(settings)}::jsonb)
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data RETURNING id
+    ) SELECT pg_notify('sqchat_changes', 'change') FROM changed`
     return settings
   }
-  return mutateLocal(state => {
+  const saved = await mutateLocal(state => {
     state.settings = settings
     return settings
   })
+  publishLocalChange()
+  return saved
 }
 
 export async function allowMessage(ip: string): Promise<boolean> {

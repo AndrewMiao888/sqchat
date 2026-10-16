@@ -1,6 +1,6 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-16',
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/theme.css'],
   app: {
     head: {
       title: 'SQ Chat',

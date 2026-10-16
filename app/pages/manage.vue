@@ -3,12 +3,18 @@ import { DEFAULT_SETTINGS, type ChatSettings, type ChatState } from '#shared/typ
 
 const { data, refresh, error } = await useAsyncData('manage-state', () => $fetch<ChatState>('/api/state'), { default: () => ({ messages: [], settings: { ...DEFAULT_SETTINGS } }) })
 const form = reactive<ChatSettings>({ ...data.value.settings })
+const themeStyle = computed(() => chatThemeStyle(form))
+const { connection } = useChatEvents(() => { void refresh() })
 const saving = ref(false)
 const status = ref('')
 const failure = ref('')
 const editingId = ref<string | null>(null)
 const editingBody = ref('')
-let poller: ReturnType<typeof setInterval> | undefined
+const previewKey = ref(0)
+
+watch(() => data.value.settings, (next, previous) => {
+  if (JSON.stringify(form) === JSON.stringify(previous)) Object.assign(form, next)
+})
 
 async function saveSettings() {
   saving.value = true
@@ -64,17 +70,14 @@ function formatDate(date: string) {
   return new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Australia/Adelaide' }).format(new Date(date))
 }
 
-onMounted(() => { poller = setInterval(() => { if (document.visibilityState === 'visible' && !editingId.value) refresh() }, 4000) })
-onUnmounted(() => { if (poller) clearInterval(poller) })
-
 useHead({ title: 'Manage chat · SQ Chat' })
 </script>
 
 <template>
-  <div class="site-shell manage-shell">
-    <header class="topbar"><NuxtLink to="/" class="brand"><span class="brand-mark">sq<span>.</span></span><span>chat</span></NuxtLink><span class="topbar-caption">Room editor</span><NuxtLink to="/" class="topbar-link">← Back to chat</NuxtLink></header>
+  <div class="site-shell manage-shell" :class="`bubble-${form.bubbleStyle}`" :style="themeStyle">
+    <header class="topbar"><BrandLogo /><span class="topbar-caption">Room editor</span><NuxtLink to="/" class="topbar-link">← Back to chat</NuxtLink></header>
     <main class="manage-main">
-      <div class="manage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> PUBLIC CMS</div><h1>Make this space yours.</h1><p>Edit what appears in the room and manage the conversation.</p></div><span class="public-pill">Open to everyone</span></div>
+      <div class="manage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> PUBLIC CMS</div><h1>Make this space yours.</h1><p>Edit what appears in the room and manage the conversation.</p></div><div class="manage-pills"><span class="live-badge" :class="{ reconnecting: connection !== 'live' }"><span class="live-dot"></span>{{ connection === 'live' ? 'Live sync' : 'Connecting…' }}</span><span class="public-pill">Open to everyone</span></div></div>
       <p class="public-explainer">Anyone with the link can change this content and edit or delete messages. Changes appear in the chat automatically.</p>
       <div v-if="error" class="alert error-alert">Could not load room content. <button class="text-button" type="button" @click="refresh()">Try again</button></div>
       <div v-if="status" class="alert success-alert" role="status">{{ status }}</div>
@@ -86,6 +89,22 @@ useHead({ title: 'Manage chat · SQ Chat' })
             <label>Short description <input v-model="form.subtitle" maxlength="160" required placeholder="A little space for everyone."></label>
             <label>Room note <textarea v-model="form.notice" maxlength="280" required rows="3" placeholder="A note at the side of the chat."></textarea></label>
             <label>Empty chat message <input v-model="form.welcome" maxlength="160" required placeholder="The conversation starts here."></label>
+            <div class="form-section-heading"><h3>Colours</h3><p>Pick the background, message and accent colours.</p></div>
+            <div class="colour-grid">
+              <label>Page background <span class="colour-control"><input v-model="form.pageBackground" type="color"><code>{{ form.pageBackground }}</code></span></label>
+              <label>Chat background <span class="colour-control"><input v-model="form.panelBackground" type="color"><code>{{ form.panelBackground }}</code></span></label>
+              <label>Message bubbles <span class="colour-control"><input v-model="form.bubbleBackground" type="color"><code>{{ form.bubbleBackground }}</code></span></label>
+              <label>Accent colour <span class="colour-control"><input v-model="form.accentColor" type="color"><code>{{ form.accentColor }}</code></span></label>
+              <label>Text colour <span class="colour-control"><input v-model="form.textColor" type="color"><code>{{ form.textColor }}</code></span></label>
+            </div>
+            <div class="form-section-heading"><h3>Type & motion</h3><p>These choices update for everyone when saved.</p></div>
+            <div class="style-grid">
+              <label>Font <select v-model="form.fontFamily"><option value="sans">Clean sans</option><option value="rounded">Rounded</option><option value="serif">Classic serif</option><option value="mono">Monospace</option></select></label>
+              <label>Message entrance <select v-model="form.messageAnimation"><option value="pop">Pop</option><option value="bubble">Bubble</option><option value="slide">Slide in</option><option value="none">None</option></select></label>
+              <label>Text motion <select v-model="form.textAnimation"><option value="fade">Fade in</option><option value="rise">Rise in</option><option value="reveal">Reveal</option><option value="none">None</option></select></label>
+              <label>Bubble corners <select v-model="form.bubbleStyle"><option value="soft">Soft</option><option value="pill">Rounded</option><option value="square">Square</option></select></label>
+            </div>
+            <div class="style-preview"><div class="preview-top"><strong>Preview</strong><button class="plain-button" type="button" @click="previewKey++">Play animation ↗</button></div><div :key="previewKey" class="preview-message" :class="[`preview-${form.messageAnimation}`, `preview-text-${form.textAnimation}`]"><span class="avatar andrew">A</span><span class="message-bubble">This is how a new message will look.</span></div></div>
             <button class="primary-button" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save changes' }} <span aria-hidden="true">→</span></button>
           </form>
         </section>
