@@ -1,4 +1,5 @@
 export function useChatEvents(onChange: () => void) {
+  const { auth, load } = useAuth()
   const connection = ref<'connecting' | 'live' | 'reconnecting'>('connecting')
   let source: EventSource | undefined
 
@@ -15,7 +16,16 @@ export function useChatEvents(onChange: () => void) {
     source = new EventSource('/api/events')
     source.addEventListener('ready', update)
     source.addEventListener('change', update)
-    source.onerror = () => { connection.value = 'reconnecting' }
+    source.addEventListener('expired', () => {
+      source?.close()
+      auth.value = { user: null, csrf: '' }
+      clearNuxtData()
+      void navigateTo('/login')
+    })
+    source.onerror = () => {
+      connection.value = 'reconnecting'
+      void load().then(user => { if (!user) { source?.close(); clearNuxtData(); void navigateTo('/login') } }).catch(() => {})
+    }
     document.addEventListener('visibilitychange', onVisibilityChange)
   })
 

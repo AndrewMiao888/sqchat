@@ -1,10 +1,13 @@
 import { cleanText, updateSettings } from '../utils/chat'
 import type { ChatSettings } from '#shared/types/chat'
+import { requireAdmin } from '../utils/auth'
+import { audit } from '../utils/store'
 
 const hexColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 const choice = <T extends string>(value: unknown, options: readonly T[]): value is T => options.includes(value as T)
 
 export default defineEventHandler(async (event) => {
+  const { user } = await requireAdmin(event)
   const input = await readBody(event)
   const title = cleanText(input?.title, 70)
   const subtitle = cleanText(input?.subtitle, 160)
@@ -33,5 +36,7 @@ export default defineEventHandler(async (event) => {
     textAnimation: input.textAnimation,
     bubbleStyle: input.bubbleStyle
   }
-  return updateSettings(settings)
+  const result = await updateSettings(settings)
+  await audit(user.id, 'settings.updated')
+  return result
 })

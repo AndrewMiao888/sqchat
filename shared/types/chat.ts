@@ -1,3 +1,4 @@
+import type { Conversation } from './auth'
 export const PEOPLE = ['Andrew', 'Darius', 'Harrison'] as const
 
 export type Person = string
@@ -30,12 +31,16 @@ export interface ChatState {
   messages: ChatMessage[]
   people: Person[]
   settings: ChatSettings
+  members: { id: string; name: string }[]
+  conversations: Conversation[]
+  conversation: string | null
+  canSend: boolean
 }
 
 export const DEFAULT_SETTINGS: ChatSettings = {
   title: 'The group chat',
   subtitle: 'A little space for Andrew, Darius and Harrison.',
-  notice: 'Make yourself at home. Pick your name and say hello.',
+  notice: 'Make yourself at home. Say hello to the group or start a private conversation.',
   welcome: 'The conversation starts here.',
   pageBackground: '#f7f6f2',
   panelBackground: '#ffffff',

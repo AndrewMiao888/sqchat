@@ -1,12 +1,12 @@
-import { addMessage, allowMessage, cleanText, personExists } from '../utils/chat'
+import { addMessage, cleanText } from '../utils/chat'
+import { requireAuth, rateLimit } from '../utils/auth'
 
 export default defineEventHandler(async (event) => {
   const input = await readBody(event)
-  const sender = typeof input?.sender === 'string' ? input.sender : ''
-  if (!await personExists(sender)) throw createError({ statusCode: 400, statusMessage: 'Choose a current name first.' })
+  const { user } = await requireAuth(event)
+  if (input?.sender !== undefined) throw createError({ statusCode: 400, statusMessage: 'Your signed-in account determines the sender.' })
   const body = cleanText(input?.body, 1000)
   if (!body) throw createError({ statusCode: 400, statusMessage: 'Write a message under 1,000 characters.' })
-  const ip = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
-  if (!await allowMessage(ip)) throw createError({ statusCode: 429, statusMessage: 'Wait a moment before sending again.' })
-  return addMessage(sender, body)
+  await rateLimit(`message:${user.id}`, 1, 2)
+  return addMessage(user, body, typeof input?.conversation === 'string' && input.conversation ? input.conversation : null)
 })
