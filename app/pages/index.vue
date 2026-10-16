@@ -89,7 +89,7 @@ useHead(() => ({ title: `${data.value?.settings.title || 'SQ Chat'} · SQ Chat` 
         </div>
 
         <div class="notice-card">
-          <div class="notice-icon" aria-hidden="true">✳</div>
+          <div class="notice-icon"><SparkIcon /></div>
           <div><strong>Room note</strong><p>{{ data.settings.notice }}</p></div>
         </div>
         <div class="sidebar-foot">No account needed. Just pick a name and join in.</div>
@@ -105,9 +105,9 @@ useHead(() => ({ title: `${data.value?.settings.title || 'SQ Chat'} · SQ Chat` 
         </div>
 
         <div ref="messageList" class="message-list" aria-live="polite" aria-relevant="additions text">
-          <div v-if="pending && !data.messages.length" class="empty-state"><span class="empty-sparkle">✳</span><p>Loading the conversation…</p></div>
+          <div v-if="pending && !data.messages.length" class="empty-state"><span class="empty-sparkle"><SparkIcon /></span><p>Loading the conversation…</p></div>
           <div v-else-if="error" class="empty-state"><span class="empty-sparkle">!</span><p>Could not load messages.</p><button class="text-button" type="button" @click="refresh()">Try again</button></div>
-          <div v-else-if="!data.messages.length" class="empty-state"><span class="empty-sparkle">✳</span><h3>{{ data.settings.welcome }}</h3><p>Pick a name and send the first message.</p></div>
+          <div v-else-if="!data.messages.length" class="empty-state"><span class="empty-sparkle"><SparkIcon /></span><h3>{{ data.settings.welcome }}</h3><p>Pick a name and send the first message.</p></div>
           <TransitionGroup v-else :name="`message-${data.settings.messageAnimation}`" tag="div" class="message-stack">
             <div key="conversation-start" class="conversation-start"><span>Conversation</span></div>
             <article v-for="message in data.messages" :key="message.id" class="message-row">

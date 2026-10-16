@@ -6,8 +6,12 @@ const form = reactive<ChatSettings>({ ...data.value.settings })
 const themeStyle = computed(() => chatThemeStyle(form))
 const { connection } = useChatEvents(() => { void refresh() })
 const saving = ref(false)
+const restoring = ref(false)
+const confirmRestore = ref(false)
 const status = ref('')
 const failure = ref('')
+const settingsFeedback = ref('')
+const settingsFailure = ref('')
 const editingId = ref<string | null>(null)
 const editingBody = ref('')
 const previewKey = ref(0)
@@ -20,13 +24,38 @@ async function saveSettings() {
   saving.value = true
   status.value = ''
   failure.value = ''
+  settingsFeedback.value = ''
+  settingsFailure.value = ''
   try {
     await $fetch('/api/settings', { method: 'PUT', body: form })
-    status.value = 'Room content saved.'
+    confirmRestore.value = false
+    settingsFeedback.value = 'Changes saved for everyone.'
     await refresh()
   } catch (error: any) {
-    failure.value = error?.data?.statusMessage || 'Could not save. Try again.'
+    settingsFailure.value = error?.data?.statusMessage || 'Could not save. Try again.'
   } finally {
+    saving.value = false
+  }
+}
+
+async function restoreDefaults() {
+  if (saving.value) return
+  saving.value = true
+  restoring.value = true
+  status.value = ''
+  failure.value = ''
+  settingsFeedback.value = ''
+  settingsFailure.value = ''
+  try {
+    await $fetch('/api/settings', { method: 'PUT', body: { ...DEFAULT_SETTINGS } })
+    Object.assign(form, DEFAULT_SETTINGS)
+    confirmRestore.value = false
+    settingsFeedback.value = 'All room settings restored to their defaults for everyone.'
+    await refresh()
+  } catch (error: any) {
+    settingsFailure.value = error?.data?.statusMessage || 'Could not restore defaults. Try again.'
+  } finally {
+    restoring.value = false
     saving.value = false
   }
 }
@@ -83,7 +112,7 @@ useHead({ title: 'Manage chat · SQ Chat' })
       <div v-if="status" class="alert success-alert" role="status">{{ status }}</div>
       <div v-if="failure" class="alert error-alert" role="alert">{{ failure }}</div>
       <div class="manage-grid">
-        <section class="manage-card"><div class="card-title"><span class="card-icon">✳</span><div><h2>Room content</h2><p>The words everyone sees in the chat.</p></div></div>
+        <section class="manage-card"><div class="card-title"><span class="card-icon"><SparkIcon /></span><div><h2>Room content</h2><p>The words everyone sees in the chat.</p></div></div>
           <form class="settings-form" @submit.prevent="saveSettings">
             <label>Room title <input v-model="form.title" maxlength="70" required placeholder="The group chat"></label>
             <label>Short description <input v-model="form.subtitle" maxlength="160" required placeholder="A little space for everyone."></label>
@@ -105,10 +134,19 @@ useHead({ title: 'Manage chat · SQ Chat' })
               <label>Bubble corners <select v-model="form.bubbleStyle"><option value="soft">Soft</option><option value="pill">Rounded</option><option value="square">Square</option></select></label>
             </div>
             <div class="style-preview"><div class="preview-top"><strong>Preview</strong><button class="plain-button" type="button" @click="previewKey++">Play animation ↗</button></div><div :key="previewKey" class="preview-message" :class="[`preview-${form.messageAnimation}`, `preview-text-${form.textAnimation}`]"><span class="avatar andrew">A</span><span class="message-bubble">This is how a new message will look.</span></div></div>
-            <button class="primary-button" type="submit" :disabled="saving">{{ saving ? 'Saving…' : 'Save changes' }} <span aria-hidden="true">→</span></button>
+            <div class="settings-actions">
+              <button class="primary-button" type="submit" :disabled="saving">{{ saving && !restoring ? 'Saving…' : 'Save changes' }} <span aria-hidden="true">→</span></button>
+              <button class="restore-button" type="button" :disabled="saving" :aria-expanded="confirmRestore" aria-controls="restore-confirmation" @click="confirmRestore = !confirmRestore">Restore all defaults</button>
+            </div>
+            <p v-if="settingsFeedback" class="settings-feedback settings-feedback-success" role="status">{{ settingsFeedback }}</p>
+            <p v-if="settingsFailure" class="settings-feedback settings-feedback-error" role="alert">{{ settingsFailure }}</p>
+            <div v-if="confirmRestore" id="restore-confirmation" class="restore-confirmation" role="group" aria-label="Confirm restoring defaults">
+              <div><strong>Restore every room setting?</strong><p>This replaces the room text, colours, font and animations for everyone, including any unsaved edits here. Messages stay in the chat.</p></div>
+              <div class="restore-confirmation-actions"><button class="restore-confirm-button" type="button" :disabled="saving" @click="restoreDefaults">{{ restoring ? 'Restoring…' : 'Yes, restore defaults' }}</button><button class="plain-button" type="button" :disabled="saving" @click="confirmRestore = false">Cancel</button></div>
+            </div>
           </form>
         </section>
-        <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon">☷</span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>
+        <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon"><MessageIcon /></span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>
           <div v-if="!data.messages.length" class="manage-empty">No messages yet. Go to the chat to start talking.</div>
           <div v-else class="manage-messages">
             <article v-for="message in [...data.messages].reverse()" :key="message.id" class="manage-message"><div class="manage-message-top"><strong>{{ message.sender }}</strong><time :datetime="message.createdAt">{{ formatDate(message.createdAt) }}</time></div>
