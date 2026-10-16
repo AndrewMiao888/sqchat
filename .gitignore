@@ -82,6 +82,9 @@ out
 .nuxt
 dist
 .output
+.data/
+.vercel/
+.build.log
 
 # Gatsby files
 .cache/

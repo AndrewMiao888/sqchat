@@ -1,0 +1,20 @@
+{
+  "name": "sqchat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "nuxt": "^4.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.1.0"
+  }
+}
