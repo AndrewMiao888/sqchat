@@ -1,6 +1,6 @@
 export const PEOPLE = ['Andrew', 'Darius', 'Harrison'] as const
 
-export type Person = typeof PEOPLE[number]
+export type Person = string
 
 export interface ChatMessage {
   id: string
@@ -28,6 +28,7 @@ export interface ChatSettings {
 
 export interface ChatState {
   messages: ChatMessage[]
+  people: Person[]
   settings: ChatSettings
 }
 
