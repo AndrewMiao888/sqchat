@@ -1,4 +1,7 @@
+import { notificationWorker } from '~/utils/notificationWorker'
+
 export default defineNuxtPlugin(() => {
+  if ('serviceWorker' in navigator) void notificationWorker().catch(() => {})
   const { auth } = useAuth()
   const { autoEnable, sync, enabled } = useDeviceNotifications()
   watch(() => auth.value.user?.id, id => { if (id) void autoEnable(); else enabled.value = false }, { immediate: true })

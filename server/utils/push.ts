@@ -42,7 +42,7 @@ export async function pushMessage(senderId: string, conversation: string | null,
   const message = messages[0]
   if (!message) return
   const files = await db`SELECT content_type FROM sq_attachments WHERE message_id = ${messageId} AND status = 'attached'`
-  await deliverPush(rows, { title: 'SQ Chat', body: messageNotification(message.sender, message.body,
+  await deliverPush(rows, { title: message.sender, body: messageNotification(message.sender, message.body,
     files.map(file => file.content_type), message.effects?.bubble === 'invisible'), tag: messageId,
     url: conversation ? '/?chat=' + encodeURIComponent(conversation) : '/' })
 }
@@ -53,7 +53,7 @@ export async function pushSettings(actorId: string, body: string) {
     JOIN sq_sessions s ON s.token_hash = p.session_hash JOIN sq_users u ON u.id = s.user_id
     WHERE u.id <> ${actorId} AND u.status = 'active' AND s.session_version = u.session_version
       AND s.expires_at > NOW() AND s.last_seen > NOW() - INTERVAL '365 days'`
-  await deliverPush(rows, { title: 'SQ Chat', body, tag: 'sq-settings', url: '/' })
+  await deliverPush(rows, { title: 'Appearance updated', body, tag: 'sq-settings', url: '/' })
 }
 
 async function deliverPush(rows: Record<string, any>[], notification: { title: string; body: string; tag: string; url: string }) {

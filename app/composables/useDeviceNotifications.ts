@@ -1,3 +1,5 @@
+import { notificationWorker } from '~/utils/notificationWorker'
+
 export function useDeviceNotifications() {
   const { api } = useAuth()
   const enabled = useState('push-enabled', () => false)
@@ -11,8 +13,7 @@ export function useDeviceNotifications() {
     return Uint8Array.from([...raw].map(char => char.charCodeAt(0)))
   }
   async function registration() {
-    await navigator.serviceWorker.register('/sw.js')
-    return navigator.serviceWorker.ready
+    return notificationWorker()
   }
   async function enable(options: { prompt: boolean; quiet?: boolean } = { prompt: true }) {
     supported.value = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
@@ -83,6 +84,7 @@ export function useDeviceNotifications() {
   async function test() {
     status.value = 'Sending a test through the push service…'
     try {
+      await registration()
       const result = await api<{ sent: boolean; statusCode?: number; message?: string }>('/api/push/test', { method: 'POST', body: {} })
       status.value = result.sent
         ? 'The push service accepted the test. Check this device’s notification centre; delivery can take a moment.'
