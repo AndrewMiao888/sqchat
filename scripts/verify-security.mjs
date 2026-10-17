@@ -118,7 +118,13 @@ try {
   const review = (await call(admin, `/api/state?conversation=${direct.id}`)).data
   check(review.messages.some(item => item.id === message.id) && !review.canSend, 'Andrew can review others private chats without impersonating a participant')
   await call(admin, '/api/messages', 'POST', { conversation: direct.id, body: 'not a participant' }, 403)
+  // Hold this fixture's already-used limit open while checking enforcement. Several
+  // network round trips above can legitimately outlast the normal two-second window.
+  const messageLimit = createHash('sha256').update(`message:${a.id}`).digest('hex')
+  await sql`INSERT INTO sq_limits (key, hits, expires_at) VALUES (${messageLimit}, 1, NOW() + INTERVAL '1 minute')
+    ON CONFLICT (key) DO UPDATE SET hits = 1, expires_at = EXCLUDED.expires_at`
   await call(a, '/api/messages', 'POST', { conversation: direct.id, body: 'rate test' }, 429)
+  await sql`DELETE FROM sq_limits WHERE key = ${messageLimit}`
   check(true, 'messages are rate limited and review-only access cannot send')
   await call(c, `/api/conversations/${direct.id}/members`, 'POST', { userIds: [admin.user.id] }, 404)
   const cCount = sc.changes

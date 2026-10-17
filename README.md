@@ -86,3 +86,7 @@ Compatible audit fixes were applied. npm still reports 11 high findings inherite
 ## Replies and retained history
 
 Choose Reply under a message to quote it in the composer. Replies are live and support text, effects and attachments. Quoted previews are resolved from the original message in the same conversation, so Andrew's edits update quotes and deleting an original replaces its quote with a deletion notice. Invisible-ink originals have a concealed quote preview. Click a quote to jump to a loaded original; Load older messages retrieves earlier history in pages of 200. Loaded history refreshes with moderation changes. Messages are retained until Andrew deletes them or clears the conversation; changing account or room access never removes them.
+
+## App download recovery
+
+If a route's JavaScript download fails during startup or navigation, the app retries once with a fresh document at the intended route. A timestamp in the URL prevents a reload loop and is removed after successful startup. Recovery does not write authentication, chat state or drafts to localStorage or sessionStorage. Unsent text stays in memory on the recovery screen, where it can be copied before a manual retry; unsent files must be attached again. Persistent failures offer a clear Try again action. With `SQ_ADMIN_PASSWORD` set, run `node scripts/verify-recovery.mjs http://localhost:3001` against a built server to test interrupted downloads, navigation, loop prevention and draft protection.
