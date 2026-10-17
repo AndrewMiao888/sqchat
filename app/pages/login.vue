@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AuthState } from '#shared/types/auth'
 const { auth, api, load } = useAuth()
+const { autoEnable } = useDeviceNotifications()
 if (await load()) await navigateTo(auth.value.user?.homeConversation ? { path: '/', query: { chat: auth.value.user.homeConversation } } : '/')
 const tab = ref<'login' | 'request' | 'setup'>('login')
 const name = ref('')
@@ -19,6 +20,7 @@ async function submit() {
       auth.value = await api<AuthState>('/api/auth/login', { method: 'POST', body: { name: name.value, password: password.value } })
       password.value = ''
       clearNuxtData()
+      await autoEnable()
       await navigateTo(auth.value.user?.homeConversation ? { path: '/', query: { chat: auth.value.user.homeConversation } } : '/')
     } else if (tab.value === 'request') {
       const result = await api('/api/auth/request', { method: 'POST', body: { name: name.value } })

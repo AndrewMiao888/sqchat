@@ -1,11 +1,13 @@
-export function useChatEvents(onChange: () => void) {
+export function useChatEvents(onChange: (payload?: { conversation?: string | null }) => void) {
   const { auth, load } = useAuth()
   const connection = ref<'connecting' | 'live' | 'reconnecting'>('connecting')
   let source: EventSource | undefined
 
-  const update = () => {
+  const update = (event?: MessageEvent) => {
     connection.value = 'live'
-    onChange()
+    let payload: { conversation?: string | null } | undefined
+    try { payload = event?.data ? JSON.parse(event.data) : undefined } catch {}
+    onChange(payload)
     // Account permissions can change while this tab remains open.
     void load().catch(() => {})
   }

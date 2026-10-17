@@ -8,6 +8,7 @@ export interface ChatMessage {
   id: string
   sender: Person
   canDelete?: boolean
+  canEdit?: boolean
   body: string
   createdAt: string
   editedAt?: string

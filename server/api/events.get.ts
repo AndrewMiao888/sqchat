@@ -23,16 +23,16 @@ export default defineEventHandler(async event => {
   const client = new Client({ connectionString: process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL })
   let closed = false
   let checking = false
-  const push = async (name: string) => {
-    if (!closed) await stream.push({ event: name, data: '{}', retry: 2000 }).catch(() => {})
+  const push = async (name: string, data = '{}') => {
+    if (!closed) await stream.push({ event: name, data, retry: 2000 }).catch(() => {})
   }
-  const check = async (name: string) => {
+  const check = async (name: string, data = '{}') => {
     if (closed) return
     try {
       if (!await sessionForHash(auth.hash)) {
         await push('expired')
         await stream.close()
-      } else await push(name)
+      } else await push(name, data)
     } catch { await stream.close().catch(() => {}) }
   }
   client.on('notification', notification => {
@@ -40,10 +40,11 @@ export default defineEventHandler(async event => {
     if (!allowed) {
       try {
         const payload = JSON.parse(notification.payload || '{}')
-        allowed = auth.user.role === 'admin' || (Array.isArray(payload.users) && payload.users.includes(auth.user.id))
+        allowed = auth.user.role === 'admin' || (payload.conversation === null && !auth.user.privateOnly)
+          || (Array.isArray(payload.users) && payload.users.includes(auth.user.id))
       } catch { return }
     }
-    if (allowed) void check('change')
+    if (allowed) void check('change', notification.payload || '{}')
   })
   client.on('error', () => { void stream.close().catch(() => {}) })
   try { await client.connect(); await client.query('LISTEN sqchat_changes') }

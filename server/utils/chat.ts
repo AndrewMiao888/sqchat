@@ -40,6 +40,9 @@ export async function notifyThread(id: string) {
   const rows = await db`SELECT user_id FROM sq_thread_members WHERE thread_id = ${id}`
   if (rows.length) await signal(rows.map(row => row.user_id))
 }
+function canOwnMessage(row: any, user: Account, conversation: string | null) {
+  return row.sender_id ? row.sender_id === user.id : !conversation && row.sender === user.name
+}
 export async function getChatState(user: Account, conversation: string | null = null, before: { at: string; id: string } | null = null): Promise<ChatState> {
   const db = await store()
   const thread = conversation ? await findThread(user, conversation) : null
@@ -66,7 +69,8 @@ export async function getChatState(user: Account, conversation: string | null = 
   return { messages: messages.map(row => {
     const original = originals.find(parent => parent.id === row.reply_to)
     const replyTo = !row.reply_to ? undefined : original ? { id: original.id, sender: original.sender, body: original.effects?.bubble === 'invisible' ? 'Invisible ink message' : original.body.slice(0, 240) || 'Attachment' } : { id: row.reply_to, sender: '', body: 'Original message deleted', deleted: true }
-      return { ...toMessage(row), canDelete: user.role === 'admin' || (row.sender_id ? row.sender_id === user.id : !conversation && row.sender === user.name), ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
+      const ownsMessage = canOwnMessage(row, user, conversation)
+      return { ...toMessage(row), canDelete: user.role === 'admin' || ownsMessage, canEdit: user.role === 'admin' || ownsMessage, ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
   }), settings: { ...DEFAULT_SETTINGS, ...(settings[0]?.data || {}) },
     people: user.privateOnly ? [] : members.filter(row => !row.private_only).map(row => row.name), members: members.map(row => ({ id: row.id, name: row.name })),
     conversations: threads.map(toThread), conversation, hasMore: rows.length > 200, nextCursor, canSend: thread ? thread.canSend : !user.privateOnly }
@@ -89,7 +93,7 @@ export async function addMessage(user: Account, body: string, conversation: stri
       INSERT INTO sq_private_messages (id, thread_id, sender_id, body, effects, reply_to)
       SELECT ${id}, ${conversation}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo} WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id, thread_id
     ), linked AS (UPDATE sq_attachments SET message_id = ${id}, status = 'attached' WHERE id IN (SELECT id FROM valid) AND EXISTS (SELECT 1 FROM changed)),
-    signal AS (SELECT pg_notify('sqchat_changes', json_build_object('users', array_agg(m.user_id))::text)
+    signal AS (SELECT pg_notify('sqchat_changes', json_build_object('users', array_agg(m.user_id), 'conversation', ${conversation})::text)
       FROM changed JOIN sq_thread_members m ON m.thread_id = changed.thread_id HAVING COUNT(*) > 0)
     SELECT changed.id FROM changed CROSS JOIN signal`
   } else {
@@ -100,19 +104,23 @@ export async function addMessage(user: Account, body: string, conversation: stri
       INSERT INTO chat_messages (id, sender, sender_id, body, effects, reply_to) SELECT ${id}, ${user.name}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo}
       WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id
     ), linked AS (UPDATE sq_attachments SET message_id = ${id}, status = 'attached' WHERE id IN (SELECT id FROM valid) AND EXISTS (SELECT 1 FROM changed)),
-    signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
+    signal AS (SELECT pg_notify('sqchat_changes', json_build_object('conversation', NULL)::text) FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
   }
   if (!rows.length) throw createError({ statusCode: 409, statusMessage: 'One of these files is not ready, belongs to another chat, or has already been sent.' })
   return { id }
 }
-export async function updateMessage(id: string, body: string) {
+export async function updateMessage(id: string, body: string, user: Account) {
   const db = await store()
   const rows = await db`WITH changed AS (
-    UPDATE chat_messages SET body = ${body}, edited_at = NOW(), effects = effects - 'text' WHERE id = ${id} RETURNING id
+    UPDATE chat_messages SET body = ${body}, edited_at = NOW(), effects = effects - 'text' WHERE id = ${id}
+    AND (${user.role === 'admin'} OR (${!user.privateOnly} AND (sender_id = ${user.id} OR (sender_id IS NULL AND sender = ${user.name})))) RETURNING id
   ), signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
   if (rows.length) return { id }
   const privateRows = await db`WITH changed AS (
-    UPDATE sq_private_messages SET body = ${body}, edited_at = NOW(), effects = effects - 'text' WHERE id = ${id} RETURNING id, thread_id
+    UPDATE sq_private_messages SET body = ${body}, edited_at = NOW(), effects = effects - 'text' WHERE id = ${id}
+    AND (${user.role === 'admin'} OR (sender_id = ${user.id} AND EXISTS (
+      SELECT 1 FROM sq_thread_members m WHERE m.thread_id = sq_private_messages.thread_id AND m.user_id = ${user.id}
+    ))) RETURNING id, thread_id
   ), signal AS (
     SELECT pg_notify('sqchat_changes', json_build_object('users', array_agg(m.user_id))::text)
     FROM changed JOIN sq_thread_members m ON m.thread_id = changed.thread_id HAVING COUNT(*) > 0

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-type IconName = 'bell' | 'arrow-up-right' | 'arrow-left' | 'arrow-up' | 'arrow-right' | 'check' | 'plus' | 'rotate' | 'trash' | 'lock' | 'shield' | 'users' | 'user' | 'settings' | 'copy' | 'paperclip' | 'file' | 'image' | 'download' | 'share' | 'close' | 'eye' | 'sound' | 'muted' | 'play' | 'reply'
+type IconName = 'bell' | 'arrow-up-right' | 'arrow-left' | 'arrow-up' | 'arrow-right' | 'check' | 'plus' | 'rotate' | 'trash' | 'lock' | 'shield' | 'users' | 'user' | 'settings' | 'copy' | 'paperclip' | 'file' | 'image' | 'download' | 'share' | 'close' | 'eye' | 'sound' | 'muted' | 'play' | 'reply' | 'edit'
 defineProps<{ name: IconName }>()
 
 const paths: Record<IconName, string[]> = {
@@ -19,6 +19,7 @@ const paths: Record<IconName, string[]> = {
   settings: ['M4 7h16', 'M4 17h16', 'M8 4v6', 'M16 14v6'],
   copy: ['M8 8h12v13H8z', 'M16 8V3H3v13h5'],
   reply: ['M9 10V5l-7 7 7 7v-5h5c4 0 7 2 8 5v-4c0-5-4-8-9-8H9'],
+  edit: ['M12 20h9', 'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'],
   paperclip: ['m8 12 7-7a4 4 0 0 1 6 6L10 22a6 6 0 0 1-8-8L13 3', 'm7 15 8-8a1.5 1.5 0 0 1 2 2l-8 8'],
   file: ['M14 2H5v20h14V7z', 'M14 2v5h5', 'M8 12h8', 'M8 16h6'],
   image: ['M3 3h18v18H3z', 'm3 16 5-5 5 5 3-3 5 5', 'M16 7h.01'],
