@@ -73,6 +73,7 @@ try {
   await draft.route(accountChunk, route => route.abort('failed'))
   await draft.goto(base.href, { waitUntil: 'domcontentloaded' })
   await draft.getByRole('textbox', { name: 'Your message' }).fill('Keep this unsent message safe.')
+  await expect(draft.locator('.composer-limit')).toContainText('30/1000')
   draft.on('dialog', dialog => dialog.accept())
   await draft.getByRole('link', { name: 'Andrew', exact: true }).click()
   await expect(draft.getByLabel('Copy your unsent message before reloading.')).toHaveValue('Keep this unsent message safe.')
