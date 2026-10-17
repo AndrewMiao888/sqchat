@@ -32,6 +32,7 @@ onBeforeUnmount(() => clearTimeout(hideTimer))
         <p v-if="message.body" class="effect-text" :aria-label="message.body"><span v-if="!message.effects?.text?.length">{{ message.body }}</span><template v-else><span v-for="char in characters" :key="char.index" :class="char.effect && !/\s/.test(char.text) ? ['effect-character', `text-effect-${char.effect}`] : ''" :style="{ '--i': char.index % 24, '--dx': `${((char.index * 37) % 121) - 60}px`, '--dy': `${((char.index * 53) % 101) - 50}px`, '--turn': `${((char.index * 29) % 91) - 45}deg` }" aria-hidden="true">{{ char.text }}</span></template></p>
         <AttachmentList v-if="message.attachments?.length" :files="message.attachments" />
         <LinkPreviews v-if="!invisible || revealed" :text="message.body" />
+        <CopyMessageButton v-if="message.body" :text="message.body" />
       </div>
       <button v-if="invisible && !revealed" class="ink-cover" type="button" aria-label="Reveal invisible ink message" @click="reveal" @pointerdown="reveal"><span class="ink-dots"></span><UiIcon name="eye" /><span>Swipe or tap to reveal</span></button>
       <button v-if="invisible && revealed" class="ink-hide plain-button" type="button" @click="revealed = false">Hide again</button>
