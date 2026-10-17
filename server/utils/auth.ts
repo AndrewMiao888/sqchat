@@ -9,6 +9,7 @@ export const sessionCookie = () => process.env.NODE_ENV === 'production' ? '__Ho
 
 export function publicAccount(row: any): Account {
   return { id: row.id, name: row.name, role: row.role, builtin: row.builtin, status: row.status,
+    privateOnly: !!row.private_only, homeConversation: row.home_thread || null,
     canChangePassword: row.role === 'admin' || !!(row.password_change_until && new Date(row.password_change_until).getTime() > Date.now()) }
 }
 

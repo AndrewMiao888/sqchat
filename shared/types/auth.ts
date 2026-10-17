@@ -3,6 +3,8 @@ export interface Account {
   name: string
   role: 'admin' | 'member'
   builtin: boolean
+  privateOnly: boolean
+  homeConversation: string | null
   status: 'pending' | 'approved' | 'active' | 'disabled'
   canChangePassword: boolean
 }

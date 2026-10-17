@@ -52,6 +52,8 @@ export async function store() {
     )`
     await Promise.all([
       db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0`,
+      db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS private_only BOOLEAN NOT NULL DEFAULT FALSE`,
+      db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS home_thread TEXT`,
       db`ALTER TABLE sq_sessions ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0`,
       db`CREATE TABLE IF NOT EXISTS sq_streams (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES sq_users(id), expires_at TIMESTAMPTZ NOT NULL
@@ -63,12 +65,23 @@ export async function store() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), edited_at TIMESTAMPTZ
     )`
     await Promise.all([
+      db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      db`ALTER TABLE sq_private_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      db`CREATE TABLE IF NOT EXISTS sq_attachments (
+        id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES sq_users(id), thread_id TEXT REFERENCES sq_threads(id),
+        message_id TEXT, name TEXT NOT NULL, content_type TEXT NOT NULL, size BIGINT NOT NULL,
+        blob_path TEXT UNIQUE NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`
+    ])
+    await db`CREATE INDEX IF NOT EXISTS sq_attachments_message ON sq_attachments(message_id)`
+    await Promise.all([
       db`CREATE INDEX IF NOT EXISTS sq_private_timeline ON sq_private_messages(thread_id, created_at DESC, id DESC)`,
       db`CREATE INDEX IF NOT EXISTS sq_sessions_user ON sq_sessions(user_id)`,
       db`CREATE INDEX IF NOT EXISTS sq_invites_user ON sq_invites(user_id)`,
       db`CREATE INDEX IF NOT EXISTS sq_audit_timeline ON sq_audit(created_at DESC)`,
       db`CREATE INDEX IF NOT EXISTS chat_timeline ON chat_messages(created_at DESC, id DESC)`
     ])
+    await db`UPDATE chat_settings SET data = jsonb_set(data, '{notice}', to_jsonb('Make yourself at home. Say hello to the group or start a private conversation.'::text)) WHERE data->>'notice' = 'Make yourself at home. Pick your name and say hello.'`
     for (const name of ['Andrew', 'Darius', 'Harrison']) {
       await db`INSERT INTO sq_users (id, name, name_key, role, builtin)
         VALUES (${randomUUID()}, ${name}, ${name.toLowerCase()}, ${name === 'Andrew' ? 'admin' : 'member'}, TRUE)

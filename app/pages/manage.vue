@@ -55,6 +55,11 @@ async function removeMessage(id: string) {
     status.value = 'Message deleted.'; await refresh()
   } catch (error: any) { failure.value = error?.data?.statusMessage || 'Could not delete the message.' }
 }
+async function removeConversation() {
+  if (!window.confirm(conversation.value ? 'Delete this conversation and every message and file for everyone?' : 'Clear all shared-room messages and files for everyone?')) return
+  try { await api('/api/conversations/' + (conversation.value || 'shared'), { method: 'DELETE', body: {} }); conversation.value = ''; await refresh(); status.value = 'Conversation cleared.' }
+  catch (error: any) { failure.value = error?.data?.statusMessage || 'Could not delete the conversation.' }
+}
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Australia/Adelaide' }).format(new Date(date))
 }
@@ -110,11 +115,12 @@ useHead({ title: 'Manage chat / SQ Chat' })
         <AccountManager />
         <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon"><MessageIcon /></span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>
           <label class="conversation-filter">Conversation<select v-model="conversation"><option value="">Everyone / shared room</option><option v-for="thread in data.conversations" :key="thread.id" :value="thread.id">{{ threadLabel(thread) }}</option></select></label>
+          <button class="plain-button danger-button" @click="removeConversation"><UiIcon name="trash" /> {{ conversation ? 'Delete conversation' : 'Clear shared room' }}</button>
           <div v-if="!data.messages.length" class="manage-empty">No messages yet. Go to the chat to start talking.</div>
           <div v-else class="manage-messages">
             <article v-for="message in [...data.messages].reverse()" :key="message.id" class="manage-message"><div class="manage-message-top"><strong>{{ message.sender }}</strong><time :datetime="message.createdAt">{{ formatDate(message.createdAt) }}</time></div>
               <template v-if="editingId === message.id"><textarea v-model="editingBody" maxlength="1000" rows="3" aria-label="Edit message"></textarea><div class="message-actions"><button class="small-primary" type="button" :disabled="saving || !editingBody.trim()" @click="saveMessage">Save</button><button class="plain-button" type="button" @click="editingId = null">Cancel</button></div></template>
-              <template v-else><p>{{ message.body }}</p><div class="message-actions"><button class="plain-button" type="button" @click="startEditing(message.id, message.body)">Edit</button><button class="plain-button danger-button" type="button" @click="removeMessage(message.id)">Delete</button></div></template>
+              <template v-else><MessageContent :message="message" :animated="false" /><div class="message-actions"><button class="plain-button" type="button" @click="startEditing(message.id, message.body)">Edit</button><button class="plain-button danger-button" type="button" @click="removeMessage(message.id)">Delete</button></div></template>
             </article>
           </div>
         </section>

@@ -7,7 +7,7 @@ Nuxt 4 chat with a shared room and private conversations for two or more people.
 - Andrew is the only administrator and the only person with access to the CMS.
 - Andrew approves Darius, Harrison, and additional accounts, then privately shares a one-use setup code. Codes expire after 24 hours. Owners choose their passwords; Andrew does not see them.
 - Members need Andrew's one-use, 24-hour permission to change their password. A forgotten password can be reset by Andrew issuing a new setup code. Changes and resets revoke sessions immediately.
-- Andrew, Darius, and Harrison cannot be deleted. Removing an additional account revokes access and preserves history. Reset names keeps the original three and preserves their credentials.
+- Andrew, Darius, Harrison, and Lucy cannot be deleted. Removing an additional account revokes access and preserves history. Reset names keeps these default accounts and preserves their credentials.
 - Password login only. Andrew's initial password is provisioned separately and is never included in source code, client assets, or logs. It is not forcibly changed.
 
 The CMS controls room text, colours, fonts, bubble shape, message entrances, text animations, and message moderation. Restore all defaults resets the room settings. The SVG/CSS S and Q logo retains its high-five and smile animation. There are no emoji UI controls.
@@ -20,7 +20,7 @@ Passwords use salted scrypt (`N=131072, r=8, p=1`). Session tokens and setup cod
 
 ## Local development
 
-Node 24 and a Neon Postgres database are required. Copy `.env.example` to `.env.local` and fill in the two server-only database URLs. No file-storage fallback is used for authenticated chat.
+Node 24 and a Neon Postgres database are required. Copy `.env.example` to `.env.local` and fill in the two server-only database URLs and private Blob token. No file-storage fallback is used for authenticated chat.
 
 ```sh
 npm install
@@ -43,7 +43,7 @@ npm run build
 vercel deploy --prod --yes
 ```
 
-Production needs `DATABASE_URL` and `DATABASE_URL_UNPOOLED` from Vercel's Neon integration. The second connection is for live notifications. Never use `NUXT_PUBLIC_` for secrets. Database migrations are additive and preserve the original group messages and settings. Existing additional names become pending accounts.
+Production needs a private Vercel Blob store connected as `BLOB_READ_WRITE_TOKEN`, plus `DATABASE_URL` and `DATABASE_URL_UNPOOLED` from Vercel's Neon integration. The second connection is for live notifications. Never use `NUXT_PUBLIC_` for secrets. Database migrations are additive and preserve the original group messages and settings. Existing additional names become pending accounts.
 
 To test a running build, set `SQ_ADMIN_PASSWORD` securely and run:
 
@@ -52,3 +52,33 @@ node --env-file=.env.local scripts/verify-security.mjs http://localhost:3001
 ```
 
 The integration check creates uniquely named temporary accounts and conversations, verifies authorization, password workflows, revocation, CSP, SSR pages, and live delivery between multiple clients, and removes its fixtures in `finally`. It saves the existing settings unchanged to verify broadcasts. It never resets real users or deletes existing messages. Use the database connected to the tested deployment.
+
+## Media and effects
+
+Attach up to four files per message, up to 20 MB each. Image, audio and video previews appear in the conversation. Downloads preserve filenames; Save / share photo uses the device share sheet when supported, with a download fallback. Saving to Photos uses the phone's share menu or touch-and-hold image menu. Codec playback depends on the browser; every attachment can also be downloaded.
+
+Files live in private Vercel Blob storage. Scoped upload tokens allow one path, type and size for 15 minutes. Metadata and message ownership live in Postgres. Every download checks the current session and conversation membership, including range requests for seeking. Inline images require valid file signatures. HTML, SVG and executable uploads are not accepted. Other files are forced downloads. This is not a malware-scanning service. The application reserves a total 500 MB for uploads and limits each account to 30 upload attempts per hour. Pending uploads expire after 24 hours; stale and deleted objects are cleaned opportunistically on later uploads.
+
+Effects opens a compact picker; holding Send also opens bubble effects. Select words to animate them, or apply an effect to the entire text. Text effects: Big, Small, Shake, Nod, Explode, Ripple, Bloom and Jitter. Bubble effects: Slam, Loud, Gentle and Invisible Ink. Screen effects: Echo, Spotlight, Balloons, Confetti, Love, Lasers, Fireworks and Celebration. Invisible Ink reveals on swipe or tap and hides after 12 seconds. Screen effects are suppressed for invisible messages so concealed words are never echoed in the backdrop.
+
+Birthday, congratulations, new-year and selected holiday greetings trigger matching screen effects when automatic greetings are enabled. Recipients can replay effects, disable them, or enable optional synthesized sound. Sounds start off. Reduced-motion preferences suppress animations. Screen effects can be dismissed. Viewer playback preferences stay in memory only. These are original web animations, not Apple's proprietary effects.
+
+## Lucy and conversation deletion
+
+Lucy is a default private-only account, initialized using `SQ_LUCY_INITIAL_PASSWORD` and `scripts/initialize-lucy.mjs`. The script reuses an unclaimed Lucy profile, hashes the password, and creates a private Andrew-Lucy conversation without a setup code. It does not overwrite an established password. Lucy can start private chats with any approved active person, including groups. The server excludes her from the shared room and blocks shared posts, uploads and downloads. Her initial login opens her default private conversation.
+
+Only Andrew can delete a private conversation or clear the shared room, including attached files. Deletions notify participants live, revoke file access and remove stored objects. Default conversations are not recreated automatically after Andrew deletes them.
+
+## Browser and media verification
+
+Install the isolated browser with `npx playwright install chromium`, then set `SQ_ADMIN_PASSWORD` securely and run:
+
+```sh
+node --env-file=.env.local scripts/verify-rich-chat.mjs http://localhost:3001
+```
+
+This suite creates temporary accounts and private conversations, uploads generated photo/audio/video/text fixtures, verifies exact downloads and access controls, and exercises the actual browser composer, effects, invisible ink, long-press Send, reduced motion, photo viewer, live updates, and mobile layout. It removes all fixtures in `finally`; screenshots go into ignored `test-results/`. Set `SQ_LUCY_PASSWORD` to additionally verify the provisioned Lucy login. The older security suite verifies account approval, password setup/reset/permission, session revocation, live filtering and moderation.
+
+### Dependency audit (17 October 2026)
+
+Compatible audit fixes were applied. npm still reports 11 high findings inherited through build/development dependencies from two upstream advisories with no patched release: [braces recursion](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and [node-forge signature verification](https://github.com/advisories/GHSA-86w9-cpqp-85rv). Neither package is included in the built server dependencies, and chat requests do not call either library. Track upstream fixes; do not use the suggested forced Nuxt downgrade as an automatic remedy.

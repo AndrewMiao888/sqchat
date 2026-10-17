@@ -1,4 +1,5 @@
 import type { Conversation } from './auth'
+import type { Attachment, MessageEffects } from './media'
 export const PEOPLE = ['Andrew', 'Darius', 'Harrison'] as const
 
 export type Person = string
@@ -9,6 +10,8 @@ export interface ChatMessage {
   body: string
   createdAt: string
   editedAt?: string
+  attachments?: Attachment[]
+  effects?: MessageEffects
 }
 
 export interface ChatSettings {

@@ -104,7 +104,7 @@ try {
   check(true, 'member cannot impersonate Andrew, administer accounts, edit settings, or bypass CSRF')
   const defaults = (await call(admin, '/api/admin/accounts')).data.filter(item => item.builtin)
   for (const account of defaults) await call(admin, '/api/admin/accounts', 'POST', { id: account.id, action: 'delete' }, 403)
-  check(defaults.length === 3, 'three default accounts cannot be deleted')
+  check(defaults.length >= 3, 'default accounts cannot be deleted')
   const direct = (await call(a, '/api/conversations', 'POST', { userIds: [b.id] })).data
   const sa = await subscribe(a), sb = await subscribe(b), sc = await subscribe(c), sad = await subscribe(admin)
   const snapshots = [sa, sb, sc, sad].map(stream => stream.changes)
@@ -187,6 +187,7 @@ try {
     const threads = await sql`SELECT id FROM sq_threads WHERE created_by = ANY(${ids}::text[])`
     const threadIds = threads.map(row => row.id)
     await sql.transaction([
+      sql`DELETE FROM sq_attachments WHERE owner_id = ANY(${ids}::text[]) OR thread_id = ANY(${threadIds}::text[])`,
       sql`DELETE FROM sq_private_messages WHERE thread_id = ANY(${threadIds}::text[])`,
       sql`DELETE FROM sq_thread_members WHERE thread_id = ANY(${threadIds}::text[])`,
       sql`DELETE FROM sq_threads WHERE id = ANY(${threadIds}::text[])`,
