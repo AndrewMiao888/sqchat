@@ -93,7 +93,7 @@ export async function addMessage(user: Account, body: string, conversation: stri
       INSERT INTO sq_private_messages (id, thread_id, sender_id, body, effects, reply_to)
       SELECT ${id}, ${conversation}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo} WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id, thread_id
     ), linked AS (UPDATE sq_attachments SET message_id = ${id}, status = 'attached' WHERE id IN (SELECT id FROM valid) AND EXISTS (SELECT 1 FROM changed)),
-    signal AS (SELECT pg_notify('sqchat_changes', json_build_object('users', array_agg(m.user_id), 'conversation', ${conversation})::text)
+    signal AS (SELECT pg_notify('sqchat_changes', json_build_object('users', array_agg(m.user_id), 'conversation', ${conversation}::text)::text)
       FROM changed JOIN sq_thread_members m ON m.thread_id = changed.thread_id HAVING COUNT(*) > 0)
     SELECT changed.id FROM changed CROSS JOIN signal`
   } else {
