@@ -85,6 +85,9 @@ export async function store() {
       db`CREATE INDEX IF NOT EXISTS chat_timeline ON chat_messages(created_at DESC, id DESC)`
     ])
     await db`UPDATE chat_settings SET data = jsonb_set(data, '{notice}', to_jsonb('Make yourself at home. Say hello to the group or start a private conversation.'::text)) WHERE data->>'notice' = 'Make yourself at home. Pick your name and say hello.'`
+    // Extend existing still-valid sessions during the rollout; activity renews them thereafter.
+    await db`UPDATE sq_sessions SET expires_at = NOW() + INTERVAL '365 days'
+      WHERE expires_at > NOW() AND last_seen > NOW() - INTERVAL '365 days'`
     for (const name of ['Andrew', 'Darius', 'Harrison']) {
       await db`INSERT INTO sq_users (id, name, name_key, role, builtin)
         VALUES (${randomUUID()}, ${name}, ${name.toLowerCase()}, ${name === 'Andrew' ? 'admin' : 'member'}, TRUE)
