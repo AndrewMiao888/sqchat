@@ -34,6 +34,7 @@ try {
   check((await call('POST', sub)).status === 200, 'subscription saved')
   check((await db`SELECT endpoint FROM sq_push WHERE session_hash=${hash}`).length === 1, 'subscription tied to current session')
   check((await call('DELETE')).status === 200 && !(await db`SELECT endpoint FROM sq_push WHERE session_hash=${hash}`).length, 'disable removes subscription')
+  if (!process.env.SKIP_BROWSER) {
   const browser = await chromium.launch({ headless: true })
   try {
     const context = await browser.newContext({ permissions: ['notifications'] })
@@ -47,6 +48,7 @@ try {
     check(await page.evaluate(() => localStorage.length === 0 && sessionStorage.length === 0), 'notifications require no browser storage')
     await context.close()
   } finally { await browser.close() }
+  }
   await call('POST', sub)
   await db`INSERT INTO sq_threads (id,created_by) VALUES (${prefix},${ids[0]})`
   for (const id of [ids[0], ids[2]]) await db`INSERT INTO sq_thread_members(thread_id,user_id) VALUES (${prefix},${id})`
@@ -68,20 +70,35 @@ try {
     await db`INSERT INTO sq_push(endpoint,session_hash,subscription) VALUES (${fixture.endpoint},${ids[i]},${JSON.stringify(fixture)}::jsonb)`
   }
   // Run the actual dispatch function against fixture database rows, replacing only network transport.
-  let source = await readFile('server/utils/push.ts', 'utf8')
+  const textSource = ts.transpileModule(await readFile('server/utils/notificationText.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+  const textUrl = 'data:text/javascript;base64,' + Buffer.from(textSource).toString('base64')
+  const { messageNotification, settingsNotification } = await import(textUrl)
+  check(messageNotification('Lucy', 'Hello', []) === 'Lucy said: Hello', 'text preview names the sender')
+  check(messageNotification('Darius', 'Look', ['image/jpeg']) === 'Darius sent a photo and said: Look', 'photo caption preview')
+  check(messageNotification('Lucy', '', ['video/mp4', 'application/pdf']) === 'Lucy sent a video and a file.', 'mixed attachments preview')
+  check(messageNotification('Lucy', 'secret', [], true) === 'Lucy sent an invisible ink message.', 'invisible ink stays hidden')
+  check(messageNotification('Lucy', '', ['audio/mp4']) === 'Lucy sent an audio file.', 'audio preview')
+  check(settingsNotification('Andrew', {pageBackground:'#ffffff'}, {pageBackground:'#000000'}) === 'Andrew changed the background colour.', 'specific appearance change')
+  check(settingsNotification('Andrew', {}, {}) === null, 'unchanged settings do not notify')
+  let source = (await readFile('server/utils/push.ts', 'utf8')).replace("'./notificationText'", JSON.stringify(textUrl))
   source = source.replace("import webpush from 'web-push'", 'const webpush = globalThis.__pushTransport').replace("import { store } from './store'", 'const store = async () => globalThis.__pushDb')
   const sent = []
   globalThis.__pushDb = db
   globalThis.__pushTransport = { sendNotification: async (subscription, payload) => { sent.push({ endpoint: subscription.endpoint, payload: JSON.parse(payload) }) } }
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
-  const { pushMessage } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
+  const { pushMessage, pushSettings } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
+  await db`INSERT INTO chat_messages(id,sender,sender_id,body) VALUES (${prefix},'Lucy',${ids[0]},'Hello')`
+  await db`INSERT INTO sq_private_messages(id,thread_id,sender_id,body) VALUES (${prefix},${prefix},${ids[0]},'Private hello')`
   // Other real subscriptions may exist; assertions only inspect these unique fixtures.
   await pushMessage(ids[0], null, prefix)
   check(sent.filter(x => x.endpoint.includes(prefix)).map(x => x.endpoint).join() === sub.endpoint + '1', 'shared push excludes sender and restricted users')
   sent.length = 0
   await pushMessage(ids[0], prefix, prefix)
   check(sent.filter(x => x.endpoint.includes(prefix)).map(x => x.endpoint).join() === sub.endpoint + '2', 'private push reaches participants only')
-  check(sent.every(x => x.payload.body === 'You have a new message.'), 'lock-screen payload hides message content')
+  check(sent.every(x => x.payload.body === ids[0] + ' said: Private hello'), 'private message preview includes sender and content')
+  sent.length = 0
+  await pushSettings(ids[0], 'Andrew changed the background colour.')
+  check(sent.filter(x => x.endpoint.includes(prefix)).length === 3 && sent.every(x => x.payload.body === 'Andrew changed the background colour.'), 'appearance changes reach active users except actor')
   await db`UPDATE sq_users SET session_version=1 WHERE id=${ids[2]}`
   sent.length = 0; await pushMessage(ids[0], prefix, prefix)
   check(!sent.some(x => x.endpoint.includes(prefix)), 'revoked session cannot receive push')
@@ -93,8 +110,9 @@ try {
   const handlers = {}; let notification; let pending; let focused = false; let posted
   const worker = { addEventListener: (name, fn) => { handlers[name] = fn }, location: { origin: base }, registration: { showNotification: async (title, options) => { notification = { title, ...options } } }, clients: { matchAll: async () => [{ postMessage: data => { posted = data }, focus: async () => { focused = true } }] } }
   vm.runInNewContext(await readFile('public/sw.js', 'utf8'), { self: worker, URL })
-  handlers.push({ data: { json: () => ({ tag: prefix, url: '/?chat=' + prefix }) }, waitUntil: p => { pending = p } }); await pending
+  handlers.push({ data: { json: () => ({ title: 'SQ Chat', body: 'Lucy said: Hello', tag: prefix, url: '/?chat=' + prefix }) }, waitUntil: p => { pending = p } }); await pending
   check(notification.tag === prefix && notification.title === 'SQ Chat', 'worker presents persistent system notification')
+  check(notification.body === 'Lucy said: Hello', 'worker preserves descriptive preview')
   handlers.notificationclick({ notification: { ...notification, close() {} }, waitUntil: p => { pending = p } }); await pending
   check(focused && posted.url === '/?chat=' + prefix, 'notification click focuses app and requests correct chat without forced reload')
   console.log(`${count} notification checks passed`)

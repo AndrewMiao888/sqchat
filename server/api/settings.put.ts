@@ -1,7 +1,9 @@
 import { cleanText, updateSettings } from '../utils/chat'
-import type { ChatSettings } from '#shared/types/chat'
+import { DEFAULT_SETTINGS, type ChatSettings } from '#shared/types/chat'
 import { requireAdmin } from '../utils/auth'
-import { audit } from '../utils/store'
+import { audit, store } from '../utils/store'
+import { settingsNotification } from '../utils/notificationText'
+import { pushSettings } from '../utils/push'
 
 const hexColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 const choice = <T extends string>(value: unknown, options: readonly T[]): value is T => options.includes(value as T)
@@ -36,7 +38,11 @@ export default defineEventHandler(async (event) => {
     textAnimation: input.textAnimation,
     bubbleStyle: input.bubbleStyle
   }
+  const db = await store()
+  const previous = await db`SELECT data FROM chat_settings WHERE id = TRUE`
+  const notification = settingsNotification(user.name, { ...DEFAULT_SETTINGS, ...previous[0]?.data }, settings)
   const result = await updateSettings(settings)
   await audit(user.id, 'settings.updated')
+  if (notification) await pushSettings(user.id, notification).catch(() => console.warn('Settings push dispatch unavailable'))
   return result
 })

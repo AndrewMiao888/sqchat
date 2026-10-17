@@ -3,8 +3,8 @@ self.addEventListener('activate', event => event.waitUntil(self.clients.claim())
 self.addEventListener('push', event => {
   let payload = {}
   try { payload = event.data.json() } catch {}
-  event.waitUntil(self.registration.showNotification('SQ Chat', {
-    body: 'You have a new message.', icon: '/icon-192.png', badge: '/icon-192.png',
+  event.waitUntil(self.registration.showNotification(typeof payload.title === 'string' ? payload.title : 'SQ Chat', {
+    body: typeof payload.body === 'string' ? payload.body : 'You have a new message.', icon: '/icon-192.png', badge: '/icon-192.png',
     tag: payload.tag || 'sq-message', data: { url: payload.url || '/' }
   }))
 })

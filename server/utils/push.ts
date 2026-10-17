@@ -1,5 +1,6 @@
 import webpush from 'web-push'
 import { store } from './store'
+import { messageNotification } from './notificationText'
 
 // Kept in the server-only database so deployments share the same signing keys.
 export async function pushKeys() {
@@ -34,9 +35,32 @@ export async function pushMessage(senderId: string, conversation: string | null,
       AND ((${conversation}::text IS NULL AND NOT u.private_only) OR EXISTS (
         SELECT 1 FROM sq_thread_members m WHERE m.thread_id = ${conversation} AND m.user_id = u.id))`
   if (!rows.length) return
-  const keys = await pushKeys()
-  const payload = JSON.stringify({ title: 'SQ Chat', body: 'You have a new message.', tag: messageId,
+  const messages = conversation
+    ? await db`SELECT u.name AS sender, m.body, m.effects FROM sq_private_messages m JOIN sq_users u ON u.id = m.sender_id
+        WHERE m.id = ${messageId} AND m.thread_id = ${conversation} AND m.sender_id = ${senderId}`
+    : await db`SELECT sender, body, effects FROM chat_messages WHERE id = ${messageId} AND sender_id = ${senderId}`
+  const message = messages[0]
+  if (!message) return
+  const files = await db`SELECT content_type FROM sq_attachments WHERE message_id = ${messageId} AND status = 'attached'`
+  await deliverPush(rows, { title: 'SQ Chat', body: messageNotification(message.sender, message.body,
+    files.map(file => file.content_type), message.effects?.bubble === 'invisible'), tag: messageId,
     url: conversation ? '/?chat=' + encodeURIComponent(conversation) : '/' })
+}
+
+export async function pushSettings(actorId: string, body: string) {
+  const db = await store()
+  const rows = await db`SELECT p.endpoint, p.subscription FROM sq_push p
+    JOIN sq_sessions s ON s.token_hash = p.session_hash JOIN sq_users u ON u.id = s.user_id
+    WHERE u.id <> ${actorId} AND u.status = 'active' AND s.session_version = u.session_version
+      AND s.expires_at > NOW() AND s.last_seen > NOW() - INTERVAL '365 days'`
+  await deliverPush(rows, { title: 'SQ Chat', body, tag: 'sq-settings', url: '/' })
+}
+
+async function deliverPush(rows: Record<string, any>[], notification: { title: string; body: string; tag: string; url: string }) {
+  if (!rows.length) return
+  const db = await store()
+  const keys = await pushKeys()
+  const payload = JSON.stringify(notification)
   await Promise.all(rows.map(async row => {
     if (!validSubscription(row.subscription)) return
     try {
