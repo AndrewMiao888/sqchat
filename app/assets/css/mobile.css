@@ -1,0 +1,101 @@
+/* Keep every route within the viewport while letting long names and message text wrap. */
+html,
+body,
+#__nuxt {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@media (max-width: 650px) {
+  .site-shell,
+  .manage-shell {
+    width: 100%;
+    min-width: 0;
+    padding-inline: clamp(10px, 3.6vw, 18px);
+  }
+
+  .topbar,
+  .topbar-actions,
+  .topbar-link,
+  .auth-layout,
+  .auth-card,
+  .account-main,
+  .manage-main,
+  .manage-grid,
+  .manage-card,
+  .chat-layout,
+  .side-panel,
+  .chat-panel,
+  .chat-header,
+  .chat-header-main,
+  .message-list,
+  .message-row,
+  .message-content,
+  .composer,
+  .composer-box,
+  .composer-tools,
+  .effects-panel,
+  .thread-members-panel,
+  .conversation-list {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .topbar { gap: 8px; }
+  .topbar-actions { gap: clamp(8px, 3vw, 14px); }
+  .topbar-actions .topbar-link { display: inline-flex; align-items: center; white-space: normal; }
+  .account-main { padding-inline: 0; }
+  .account-heading > div,
+  .card-title > div,
+  .manage-heading > div { min-width: 0; }
+  .account-heading h1,
+  .manage-heading h1,
+  .card-title h2,
+  .side-panel h1 { overflow-wrap: anywhere; }
+  .manage-card { padding: clamp(14px, 4.5vw, 20px); }
+  .chat-header { gap: 8px; padding-inline: clamp(10px, 3vw, 16px); }
+  .chat-header-main { flex: 1 1 auto; }
+  .chat-header-main > div { min-width: 0; }
+  .chat-header h2,
+  .chat-header p,
+  .chat-header .members-toggle { overflow-wrap: anywhere; }
+  .chat-header .live-badge { flex: 0 0 auto; white-space: nowrap; }
+  .message-list { padding-inline: clamp(10px, 3.8vw, 16px); }
+  .message-meta { flex-wrap: wrap; gap: 4px 8px; }
+  .message-bubble { max-width: 100%; overflow-wrap: anywhere; }
+  .composer { padding-inline: clamp(10px, 3.5vw, 15px); }
+  .composer-tools { flex-wrap: wrap; gap: 8px 14px; }
+  .composer-tools .plain-button { max-width: 100%; }
+  .composer-limit { margin-left: auto; }
+  .composer-bottom { flex-wrap: wrap; gap: 4px 10px; }
+  .effects-panel { padding: clamp(11px, 3.8vw, 16px); }
+  .effect-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .member-chips > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .conversation-list .person-button { min-width: 0; }
+  .person-name,
+  .conversation-caption { min-width: 0; overflow-wrap: anywhere; }
+  .settings-actions,
+  .style-grid,
+  .colour-grid { min-width: 0; }
+  .settings-actions > *,
+  .account-actions > *,
+  .restore-confirmation-actions > * { min-width: 0; max-width: 100%; }
+  .account-actions { gap: 10px 14px; }
+  .field-help,
+  .form-error,
+  .public-explainer,
+  .notice-card p { overflow-wrap: anywhere; }
+}
+
+@media (max-width: 360px) {
+  .topbar-actions { gap: 7px; }
+  .topbar-actions .topbar-link { font-size: 11px; }
+  .chat-header { align-items: flex-start; }
+  .chat-header .live-badge { padding: 6px; font-size: 9px; }
+  .message-row { gap: 7px; }
+  .message-avatar { width: 29px; height: 29px; }
+  .people-list { gap: 5px; }
+  .person-button { padding-inline: 3px; }
+  .person-name { font-size: 10px; }
+}
