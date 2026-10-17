@@ -19,11 +19,27 @@ for (const url of ['file:///etc/passwd','https://example.com:444','https://me:se
 assert.deepEqual(previewMetadata('<title>Fallback</title><meta content="A &amp; B" property="og:title"><meta name="description" content="Hello &#39;world&#39;">'), {title:'A & B',description:"Hello 'world'"})
 await assert.rejects(fetchPreview('http://127.0.0.1/', AbortSignal.timeout(1000)), /Private destination/)
 console.log('PASS: links, metadata, unsafe destinations and URL protocols')
-const handlers = {}; let notification, pending
-vm.runInNewContext(await readFile('public/sw.js', 'utf8'), { self: { addEventListener: (type, fn) => handlers[type] = fn, registration: { showNotification: async (title, options) => notification = {title,...options} }, skipWaiting: async () => {}, clients: { claim: async () => {} } } })
+const handlers = {}; let notification, pending, destination, focused
+const origin = 'https://sqchat.vercel.app'
+const appWindow = { url: origin + '/', navigate: async url => { destination = url; return {focus: async () => {focused = true}} } }
+const workerContext = { addEventListener: (type, fn) => handlers[type] = fn,
+  location: {origin}, registration: { showNotification: async (title, options) => notification = {title,...options} },
+  skipWaiting: async () => {}, clients: { claim: async () => {}, matchAll: async () => [appWindow], openWindow: async url => {destination = url} } }
+vm.runInNewContext(await readFile('public/sw.js', 'utf8'), { self: workerContext, URL })
 handlers.push({data:{json:()=>({title:'Lucy',body:'Lucy said: Hello',url:'/?chat=abc'})},waitUntil:p=>pending=p})
 await pending
 assert.equal(notification.title,'Lucy'); assert.equal(notification.body,'Lucy said: Hello')
+assert.equal(notification.silent,false); assert.equal(notification.renotify,true)
+assert.equal(notification.requireInteraction,undefined)
+assert.equal(notification.vibrate.join(','),'180,80,180')
+handlers.notificationclick({notification:{...notification,close(){}},waitUntil:p=>pending=p})
+await pending
+assert.equal(destination,origin+'/?chat=abc'); assert.equal(focused,true)
+workerContext.clients.matchAll=async()=>[]
+destination=undefined
+handlers.notificationclick({notification:{...notification,close(){}},waitUntil:p=>pending=p})
+await pending
+assert.equal(destination,origin+'/?chat=abc')
 const { notificationWorker, NOTIFICATION_WORKER } = await moduleAt('app/utils/notificationWorker.ts')
 let updated = false, options, registered
 const worker = new EventTarget(); worker.state = 'installing'
@@ -31,4 +47,4 @@ const registration = { installing:worker, update:async()=>{ updated=true; setTim
 Object.defineProperty(globalThis,'navigator',{configurable:true,value:{serviceWorker:{register:async(url,opts)=>{registered=url;options=opts;return registration}}}})
 assert.equal(await notificationWorker(),registration)
 assert.equal(updated,true); assert.equal(worker.state,'activated'); assert.equal(registered,NOTIFICATION_WORKER); assert.equal(options.updateViaCache,'none')
-console.log('PASS: descriptive notifications and forced worker activation before use')
+console.log('PASS: alert presentation, chat links and forced worker activation before use')

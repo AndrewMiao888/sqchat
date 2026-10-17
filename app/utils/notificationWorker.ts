@@ -1,5 +1,5 @@
 // Change the script URL to force installed apps to replace older notification handlers.
-export const NOTIFICATION_WORKER = '/sw.js?v=4'
+export const NOTIFICATION_WORKER = '/sw.js?v=5'
 let pending: Promise<ServiceWorkerRegistration> | undefined
 export function notificationWorker() {
   if (pending) return pending
