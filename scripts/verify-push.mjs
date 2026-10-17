@@ -50,6 +50,19 @@ try {
   await call('POST', sub)
   await db`INSERT INTO sq_threads (id,created_by) VALUES (${prefix},${ids[0]})`
   for (const id of [ids[0], ids[2]]) await db`INSERT INTO sq_thread_members(thread_id,user_id) VALUES (${prefix},${id})`
+  const deleteMessage = async id => fetch(base + '/api/messages/' + id, { method: 'DELETE', headers: { Origin: base, 'Content-Type': 'application/json', 'X-Requested-With': 'SQChat', Cookie: cookie, 'X-SQ-CSRF': csrf }, body: '{}' })
+  await db`INSERT INTO chat_messages (id,sender,sender_id,body) VALUES (${prefix+'own'},${ids[0]},${ids[0]},'Own'), (${prefix+'other'},${ids[1]},${ids[1]},'Other')`
+  await db`INSERT INTO sq_private_messages (id,thread_id,sender_id,body) VALUES (${prefix+'privateown'},${prefix},${ids[0]},'Own'), (${prefix+'privateother'},${prefix},${ids[2]},'Other')`
+  check((await deleteMessage(prefix+'other')).status === 404, 'member cannot delete another shared message')
+  check((await deleteMessage(prefix+'privateother')).status === 404, 'member cannot delete another private message')
+  check((await deleteMessage(prefix+'own')).status === 200, 'member can delete own shared message')
+  await db`DELETE FROM sq_thread_members WHERE thread_id=${prefix} AND user_id=${ids[0]}`
+  check((await deleteMessage(prefix+'privateown')).status === 404, 'removed participant cannot act in inaccessible chat')
+  await db`INSERT INTO sq_thread_members(thread_id,user_id) VALUES (${prefix},${ids[0]})`
+  check((await deleteMessage(prefix+'privateown')).status === 200, 'member can delete own private message')
+  await db`UPDATE sq_users SET role='admin' WHERE id=${ids[0]}`
+  check((await deleteMessage(prefix+'other')).status === 200 && (await deleteMessage(prefix+'privateother')).status === 200, 'administrator can still delete anyone’s messages')
+  await db`UPDATE sq_users SET role='member' WHERE id=${ids[0]}`
   for (let i = 1; i < ids.length; i++) {
     const fixture = { ...sub, endpoint: sub.endpoint + i }
     await db`INSERT INTO sq_push(endpoint,session_hash,subscription) VALUES (${fixture.endpoint},${ids[i]},${JSON.stringify(fixture)}::jsonb)`
@@ -87,6 +100,9 @@ try {
   console.log(`${count} notification checks passed`)
 } finally {
   await db`DELETE FROM sq_push WHERE endpoint LIKE ${'%' + prefix + '%'}`
+  await db`DELETE FROM chat_messages WHERE id LIKE ${prefix+'%'}`
+  await db`DELETE FROM sq_private_messages WHERE thread_id=${prefix}`
+  await db`DELETE FROM sq_audit WHERE actor_id=ANY(${ids}::text[])`
   await db`DELETE FROM sq_thread_members WHERE thread_id=${prefix}`
   await db`DELETE FROM sq_threads WHERE id=${prefix}`
   await db`DELETE FROM sq_sessions WHERE user_id=ANY(${ids}::text[])`

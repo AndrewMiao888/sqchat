@@ -101,3 +101,5 @@ Enable in My account > Device notifications on each device. Web Push dispatches 
 Subscriptions are bound to a server session and cascade away on sign-out/revocation. Only active shared-room members or private-chat participants receive notifications; senders are excluded. Lock-screen previews contain no message text or sender names. The service worker caches no conversations and notification clicks preserve the app's unsent-message navigation guard. VAPID signing keys are generated once and stored in server-only sq_config; include this table in protected database backups. No notification settings or messages use localStorage.
 
 The SVG favicon follows accent colour changes immediately in chat and settings. Installed app icons remain the SQ brand icon (platforms cache these separately).
+
+Members can delete their own messages in chats they can access; Andrew can delete any message. Deletion removes the message for everyone, revokes attachments and leaves existing reply quotes marked as deleted. Conversation deletion remains administrator-only.

@@ -70,6 +70,7 @@ export async function store() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), edited_at TIMESTAMPTZ
     )`
     await Promise.all([
+      db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sender_id TEXT`,
       db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
       db`ALTER TABLE sq_private_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
       db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to TEXT`,

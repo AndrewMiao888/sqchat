@@ -7,6 +7,7 @@ export type Person = string
 export interface ChatMessage {
   id: string
   sender: Person
+  canDelete?: boolean
   body: string
   createdAt: string
   editedAt?: string
