@@ -1,5 +1,5 @@
 <script setup lang="ts">
-type IconName = 'arrow-up-right' | 'arrow-left' | 'arrow-up' | 'arrow-right' | 'check' | 'plus' | 'rotate' | 'trash' | 'lock' | 'shield' | 'users' | 'user' | 'settings' | 'copy' | 'paperclip' | 'file' | 'image' | 'download' | 'share' | 'close' | 'eye' | 'sound' | 'muted' | 'play' | 'reply'
+type IconName = 'bell' | 'arrow-up-right' | 'arrow-left' | 'arrow-up' | 'arrow-right' | 'check' | 'plus' | 'rotate' | 'trash' | 'lock' | 'shield' | 'users' | 'user' | 'settings' | 'copy' | 'paperclip' | 'file' | 'image' | 'download' | 'share' | 'close' | 'eye' | 'sound' | 'muted' | 'play' | 'reply'
 defineProps<{ name: IconName }>()
 
 const paths: Record<IconName, string[]> = {
@@ -7,6 +7,7 @@ const paths: Record<IconName, string[]> = {
   'arrow-left': ['M19 12H5', 'm12 5-7 7 7 7'],
   'arrow-up': ['M12 19V5', 'm5 12 7-7 7 7'],
   'arrow-right': ['M5 12h14', 'm12 5 7 7-7 7'],
+  bell: ['M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9', 'M10 21h4'],
   check: ['m5 12 4 4L19 6'],
   plus: ['M12 5v14', 'M5 12h14'],
   rotate: ['M3 11a9 9 0 1 1 2.6 6.4', 'M3 4v7h7'],

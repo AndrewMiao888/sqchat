@@ -2,6 +2,7 @@ import { addMessage, cleanText } from '../utils/chat'
 import { requireAuth, rateLimit } from '../utils/auth'
 import { messageEffects } from '../utils/effects'
 import { MAX_ATTACHMENTS } from '#shared/types/media'
+import { pushMessage } from '../utils/push'
 
 export default defineEventHandler(async (event) => {
   const input = await readBody(event)
@@ -15,5 +16,8 @@ export default defineEventHandler(async (event) => {
   const replyTo = input?.replyTo || null
   if (replyTo !== null && (typeof replyTo !== 'string' || replyTo.length > 100)) throw createError({ statusCode: 400, statusMessage: 'Choose a message to reply to.' })
   await rateLimit(`message:${user.id}`, 1, 2)
-  return addMessage(user, body, typeof input?.conversation === 'string' && input.conversation ? input.conversation : null, effects, attachments, replyTo)
+  const conversation = typeof input?.conversation === 'string' && input.conversation ? input.conversation : null
+  const result = await addMessage(user, body, conversation, effects, attachments, replyTo)
+  event.waitUntil(pushMessage(user.id, conversation, result.id).catch(() => console.warn('Push dispatch unavailable')))
+  return result
 })

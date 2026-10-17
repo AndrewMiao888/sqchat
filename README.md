@@ -16,7 +16,7 @@ The CMS controls room text, colours, fonts, bubble shape, message entrances, tex
 
 Postgres `LISTEN/NOTIFY` and authenticated server-sent events update open pages without refreshes. Private change notifications go only to participants and Andrew. Streams reconnect and recheck sessions. Browser state uses memory and an HttpOnly session cookie; no localStorage or sessionStorage is used. Chat data is stored in Postgres.
 
-Passwords use salted scrypt (`N=131072, r=8, p=1`). Session tokens and setup codes are random 256-bit values; only their hashes are stored. Production cookies use `__Host-`, Secure, HttpOnly and SameSite Strict. Sessions renew while used and expire after one year without activity, with no fixed lifetime limit. Credential versions invalidate concurrent stale logins after a reset or revocation. There are limits on sign-in attempts, messages, writes, and concurrent live tabs; mutation requests require same-origin JSON and a CSRF token. The server checks permissions on every protected API request and uses parameterized SQL. Responses use no-store, nonce CSP, frame protection, HSTS, and other restrictive headers. Andrew can review an audit log that excludes passwords and message contents.
+Passwords use salted scrypt (`N=131072, r=8, p=1`). Session tokens are random 256-bit values; setup codes are random 6- or 12-digit numbers; only their hashes are stored. Production cookies use `__Host-`, Secure, HttpOnly and SameSite Strict. Sessions renew while used and expire after one year without activity, with no fixed lifetime limit. Credential versions invalidate concurrent stale logins after a reset or revocation. There are limits on sign-in attempts, messages, writes, and concurrent live tabs; mutation requests require same-origin JSON and a CSRF token. The server checks permissions on every protected API request and uses parameterized SQL. Responses use no-store, nonce CSP, frame protection, HSTS, and other restrictive headers. Andrew can review an audit log that excludes passwords and message contents.
 
 ## Local development
 
@@ -92,3 +92,12 @@ Choose Reply under a message to quote it in the composer. Replies are live and s
 ## App download recovery
 
 If a route's JavaScript download fails during startup or navigation, the app retries once with a fresh document at the intended route. A timestamp in the URL prevents a reload loop and is removed after successful startup. Recovery does not write authentication, chat state or drafts to localStorage or sessionStorage. Unsent text stays in memory on the recovery screen, where it can be copied before a manual retry; unsent files must be attached again. Persistent failures offer a clear Try again action. With `SQ_ADMIN_PASSWORD` set, run `node scripts/verify-recovery.mjs http://localhost:3001` against a built server to test interrupted downloads, navigation, loop prevention and draft protection.
+
+
+## Device notifications
+
+Enable in My account > Device notifications on each device. Web Push dispatches after a message is saved, with high urgency and a one-hour delivery TTL. Vercel's request waitUntil keeps dispatch alive after the message response. Browser permission is required; iOS/iPadOS 16.4+ requires adding SQ Chat to the Home Screen. Delivery timing depends on connectivity, browser/OS settings and Focus mode.
+
+Subscriptions are bound to a server session and cascade away on sign-out/revocation. Only active shared-room members or private-chat participants receive notifications; senders are excluded. Lock-screen previews contain no message text or sender names. The service worker caches no conversations and notification clicks preserve the app's unsent-message navigation guard. VAPID signing keys are generated once and stored in server-only sq_config; include this table in protected database backups. No notification settings or messages use localStorage.
+
+The SVG favicon follows accent colour changes immediately in chat and settings. Installed app icons remain the SQ brand icon (platforms cache these separately).

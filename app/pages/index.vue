@@ -28,6 +28,7 @@ const showMembers = ref(false)
 const additions = ref<string[]>([])
 const starting = ref(false)
 const messageList = ref<HTMLElement | null>(null)
+useHead(() => ({ link: [{ rel: 'icon', type: 'image/svg+xml', key: 'favicon', href: '/favicon.svg?accent=' + encodeURIComponent(data.value.settings.accentColor) }] }))
 const themeStyle = computed(() => chatThemeStyle(data.value.settings))
 const { connection } = useChatEvents(() => { void refreshLive().catch(() => {}) })
 async function refreshLive() {
@@ -110,7 +111,7 @@ useHead(() => ({ title: `${data.value.settings.title || 'SQ Chat'} · SQ Chat` }
 </script>
 <template>
   <div class="site-shell" :class="[`bubble-${data.settings.bubbleStyle}`, `text-${data.settings.textAnimation}`]" :style="themeStyle">
-    <header class="topbar"><BrandLogo /><span class="topbar-caption">A space for your people</span><nav class="topbar-actions"><NuxtLink v-if="auth.user?.role === 'admin'" to="/manage" class="topbar-link"><UiIcon name="settings" /> Settings</NuxtLink><NuxtLink to="/account" class="topbar-link"><UiIcon name="user" /> {{ auth.user?.name }}</NuxtLink></nav></header>
+    <header class="topbar"><BrandLogo /><span class="topbar-caption">A space for your people</span><nav class="topbar-actions"><NuxtLink to="/account#notifications" class="topbar-link" aria-label="Device notifications" title="Device notifications"><UiIcon name="bell" /></NuxtLink><NuxtLink v-if="auth.user?.role === 'admin'" to="/manage" class="topbar-link"><UiIcon name="settings" /> Settings</NuxtLink><NuxtLink to="/account" class="topbar-link"><UiIcon name="user" /> {{ auth.user?.name }}</NuxtLink></nav></header>
     <main class="chat-layout">
       <aside class="side-panel" :class="{ 'mobile-open': mobileConversations }"><button class="mobile-conversations-toggle" :aria-expanded="mobileConversations" @click="mobileConversations = !mobileConversations"><UiIcon name="users" /><strong>Conversations</strong><UiIcon :name="mobileConversations ? 'close' : 'arrow-right'" /></button><div class="eyebrow"><span class="eyebrow-line"></span> YOUR SPACE</div><h1>{{ data.settings.title }}</h1><p class="side-intro">{{ data.settings.subtitle }}</p><div class="side-divider"></div>
         <div class="section-heading"><span>Conversations</span><span class="section-hint">{{ auth.user?.name }}</span></div>

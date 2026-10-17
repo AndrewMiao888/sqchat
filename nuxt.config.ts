@@ -6,6 +6,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'SQ Chat',
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg', key: 'favicon' }, { rel: 'manifest', href: '/manifest.webmanifest' }, { rel: 'apple-touch-icon', href: '/icon-192.png' }],
       meta: [
         { name: 'description', content: 'A simple shared chat for Andrew, Darius and Harrison.' },
         { name: 'theme-color', content: '#f7f6f2' }

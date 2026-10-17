@@ -47,6 +47,10 @@ export async function store() {
       db`CREATE TABLE IF NOT EXISTS sq_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
       db`CREATE TABLE IF NOT EXISTS chat_people (name_key TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`
     ])
+    await db`CREATE TABLE IF NOT EXISTS sq_push (
+      endpoint TEXT PRIMARY KEY, session_hash TEXT NOT NULL REFERENCES sq_sessions(token_hash) ON DELETE CASCADE,
+      subscription JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`
     await db`CREATE TABLE IF NOT EXISTS sq_thread_members (
       thread_id TEXT NOT NULL REFERENCES sq_threads(id), user_id TEXT NOT NULL REFERENCES sq_users(id),
       joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (thread_id, user_id)
