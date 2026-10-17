@@ -36,11 +36,13 @@ export function previewMetadata(html: string) {
   }
   return {
     title: decode(meta['og:title'] || meta['twitter:title'] || html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').slice(0, 180),
-    description: decode(meta['og:description'] || meta.description || meta['twitter:description'] || '').slice(0, 300)
+    description: decode(meta['og:description'] || meta.description || meta['twitter:description'] || '').slice(0, 300),
+    image: decode(meta['og:image:secure_url'] || meta['og:image'] || meta['twitter:image'] || ''),
+    siteName: decode(meta['og:site_name'] || '').slice(0, 80)
   }
 }
 
-export async function fetchPreview(value: string, signal: AbortSignal, redirects = 0): Promise<{ title: string; description: string }> {
+async function fetchPublic(value: string, signal: AbortSignal, kind: 'html' | 'image', redirects = 0): Promise<Buffer> {
   const url = previewUrl(value)
   signal.throwIfAborted()
   const addresses = await new Promise<Awaited<ReturnType<typeof lookup>>[]>((resolve, reject) => {
@@ -52,21 +54,33 @@ export async function fetchPreview(value: string, signal: AbortSignal, redirects
   if (!addresses.length || addresses.some(entry => !publicAddress(entry.address))) throw new Error('Private destination')
   const address = addresses[0]!
   // Pin the connection to the validated address; redirects get their own validation.
-  const response = await new Promise<{ html?: string; redirect?: string }>((resolve, reject) => {
+  const response = await new Promise<{ data?: Buffer; redirect?: string }>((resolve, reject) => {
     const req = (url.protocol === 'https:' ? request : httpRequest)(url, {
       signal, agent: false, family: address.family,
       lookup: ((_hostname: string, options: any, callback: any) => options?.all ? callback(null, [address]) : callback(null, address.address, address.family)) as any,
-      headers: { 'User-Agent': 'SQChat-LinkPreview/1.0', Accept: 'text/html', 'Accept-Encoding': 'identity' }
+      headers: { 'User-Agent': 'SQChat-LinkPreview/1.0', Accept: kind === 'html' ? 'text/html' : 'image/png,image/jpeg,image/webp,image/gif', 'Accept-Encoding': 'identity' }
     }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode || 0) && res.headers.location) { resolve({ redirect: res.headers.location }); res.destroy(); return }
-      if (res.statusCode !== 200 || !res.headers['content-type']?.includes('text/html')) { res.destroy(); reject(new Error('No HTML preview')); return }
+      const type = res.headers['content-type']?.split(';')[0]?.trim().toLowerCase()
+      if (res.statusCode !== 200 || (kind === 'html' ? type !== 'text/html' : !['image/png','image/jpeg','image/webp','image/gif'].includes(type || ''))) { res.destroy(); reject(new Error('Unsupported preview content')); return }
       const chunks: Buffer[] = []; let size = 0
       res.on('data', (chunk: Buffer) => {
+        const limit = kind === 'html' ? 512 * 1024 : 2 * 1024 * 1024
+        if (size + chunk.length > limit) {
+          if (kind === 'image') { res.destroy(); reject(new Error('Preview too large')); return }
+          chunks.push(chunk.subarray(0, limit - size))
+          resolve({ data: Buffer.concat(chunks) })
+          res.destroy()
+          return
+        }
         size += chunk.length
-        if (size > 256 * 1024) { res.destroy(); reject(new Error('Preview too large')); return }
         chunks.push(chunk)
+        if (kind === 'html' && /<\/head\s*>/i.test(Buffer.concat(chunks).toString('utf8'))) {
+          resolve({ data: Buffer.concat(chunks) })
+          res.destroy()
+        }
       })
-      res.on('end', () => resolve({ html: Buffer.concat(chunks).toString('utf8') }))
+      res.on('end', () => resolve({ data: Buffer.concat(chunks) }))
       res.on('error', reject)
     })
     req.on('error', reject)
@@ -74,7 +88,21 @@ export async function fetchPreview(value: string, signal: AbortSignal, redirects
   })
   if (response.redirect) {
     if (redirects >= 3) throw new Error('Too many redirects')
-    return fetchPreview(new URL(response.redirect, url).href, signal, redirects + 1)
+    return fetchPublic(new URL(response.redirect, url).href, signal, kind, redirects + 1)
   }
-  return previewMetadata(response.html || '')
+  return response.data || Buffer.alloc(0)
+}
+
+export async function fetchPreview(value: string, signal: AbortSignal) {
+  const html = await fetchPublic(value, signal, 'html')
+  const metadata = previewMetadata(html.toString('utf8'))
+  let image = ''
+  if (metadata.image) {
+    try { image = previewUrl(new URL(metadata.image, value).href).href } catch { /* Ignore invalid image URLs. */ }
+  }
+  return { title: metadata.title, description: metadata.description, image, siteName: metadata.siteName }
+}
+
+export async function fetchPreviewImage(value: string, signal: AbortSignal) {
+  return fetchPublic(value, signal, 'image')
 }

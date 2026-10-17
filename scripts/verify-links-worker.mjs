@@ -9,6 +9,9 @@ async function moduleAt(path) {
 const { messageLinks } = await moduleAt('shared/utils/links.ts')
 assert.equal(messageLinks('Visit https://example.com/page.')[0].url, 'https://example.com/page')
 assert.equal(messageLinks('www.example.com')[0].url, 'https://www.example.com/')
+assert.equal(messageLinks('Watch youtube.com/watch?v=123 now')[0].url, 'https://youtube.com/watch?v=123')
+assert.equal(messageLinks('github.com is useful')[0].url, 'https://github.com/')
+assert.equal(messageLinks('Email me@example.com').length, 0)
 assert.equal(messageLinks('(https://example.com/a_(b))')[0].url, 'https://example.com/a_(b)')
 assert.equal(messageLinks('javascript:alert(1) https://user:pass@example.com').length, 0)
 assert.equal(messageLinks('https://example.com https://example.com').length, 1)
@@ -16,7 +19,7 @@ const { publicAddress, previewUrl, previewMetadata, fetchPreview } = await modul
 for (const ip of ['127.0.0.1','10.0.0.1','169.254.169.254','172.16.0.1','192.168.1.1','100.64.0.1','::1','::ffff:127.0.0.1','fc00::1','2001:db8::1']) assert.equal(publicAddress(ip), false, ip)
 for (const ip of ['1.1.1.1','8.8.8.8','2606:4700:4700::1111']) assert.equal(publicAddress(ip), true, ip)
 for (const url of ['file:///etc/passwd','https://example.com:444','https://me:secret@example.com']) assert.throws(() => previewUrl(url))
-assert.deepEqual(previewMetadata('<title>Fallback</title><meta content="A &amp; B" property="og:title"><meta name="description" content="Hello &#39;world&#39;">'), {title:'A & B',description:"Hello 'world'"})
+assert.deepEqual(previewMetadata('<title>Fallback</title><meta content="A &amp; B" property="og:title"><meta name="description" content="Hello &#39;world&#39;"><meta property="og:image" content="https://example.com/cover.png?x=1&amp;y=2"><meta property="og:site_name" content="Example">'), {title:'A & B',description:"Hello 'world'",image:'https://example.com/cover.png?x=1&y=2',siteName:'Example'})
 await assert.rejects(fetchPreview('http://127.0.0.1/', AbortSignal.timeout(1000)), /Private destination/)
 console.log('PASS: links, metadata, unsafe destinations and URL protocols')
 const handlers = {}; let notification, pending, destination, focused
