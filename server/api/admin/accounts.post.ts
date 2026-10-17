@@ -1,6 +1,7 @@
 import { requireAdmin, rateLimit } from '../../utils/auth'
 import { store, audit, signal } from '../../utils/store'
-import { token, digest } from '../../utils/passwords'
+import { randomInt } from 'node:crypto'
+import { digest } from '../../utils/passwords'
 
 export default defineEventHandler(async event => {
   const { user } = await requireAdmin(event)
@@ -20,7 +21,15 @@ export default defineEventHandler(async event => {
     case 'approve':
     case 'reset': {
       if (input.action === 'approve' && target.status === 'active') throw createError({ statusCode: 409, statusMessage: 'This account is already active.' })
-      code = token()
+      const preferences = await db`SELECT value FROM sq_config WHERE key = 'setup_code_length'`
+      const digits = preferences[0]?.value === 'long' ? 12 : 6
+      for (let attempt = 0; attempt < 10; attempt++) {
+        code = randomInt(0, 10 ** digits).toString().padStart(digits, '0')
+        const collision = await db`SELECT 1 FROM sq_invites WHERE token_hash = ${digest(code)} AND expires_at > NOW()`
+        if (!collision.length) break
+        code = undefined
+      }
+      if (!code) throw createError({ statusCode: 503, statusMessage: 'Could not create a unique setup code. Try again.' })
       await db.transaction([
         db`UPDATE sq_users SET status = 'approved', password_hash = NULL, password_change_until = NULL, session_version = session_version + 1 WHERE id = ${target.id}`,
         db`DELETE FROM sq_sessions WHERE user_id = ${target.id}`,

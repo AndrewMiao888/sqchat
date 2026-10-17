@@ -1,11 +1,13 @@
 import { store, audit, signal } from '../../utils/store'
 import { digest, hashPassword, validatePassword } from '../../utils/passwords'
+import { clientKey, rateLimit } from '../../utils/auth'
 
 export default defineEventHandler(async event => {
+  await rateLimit(`setup-ip:${clientKey(event)}`, 10, 600)
   const input = await readBody(event)
   validatePassword(input?.password)
   const code = typeof input?.code === 'string' ? input.code.trim() : ''
-  if (!/^[A-Za-z0-9_-]{43}$/.test(code)) throw createError({ statusCode: 400, statusMessage: 'Enter the setup code Andrew gave you.' })
+  if (!/^(?:[0-9]{6}|[0-9]{12}|[A-Za-z0-9_-]{43})$/.test(code)) throw createError({ statusCode: 400, statusMessage: 'Enter the numeric setup code Andrew gave you.' })
   const db = await store()
   const invites = await db`SELECT i.user_id FROM sq_invites i JOIN sq_users u ON u.id = i.user_id
     WHERE i.token_hash = ${digest(code)} AND i.expires_at > NOW() AND u.status IN ('approved','active') AND u.role <> 'admin'`

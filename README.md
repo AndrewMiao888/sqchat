@@ -67,6 +67,8 @@ Birthday, congratulations, new-year and selected holiday greetings trigger match
 
 Lucy is a default private-only account, initialized using `SQ_LUCY_INITIAL_PASSWORD` and `scripts/initialize-lucy.mjs`. The script reuses an unclaimed Lucy profile, hashes the password, and creates a private Andrew-Lucy conversation without a setup code. It does not overwrite an established password. Lucy can start private chats with any approved active person, including groups. Shared-room access starts off. Andrew can allow or remove shared-room access for Lucy or any other member in Settings. Permission changes update open tabs immediately; removing access never deletes existing messages. Her initial login opens her default private conversation.
 
+Andrew chooses the length of newly issued numeric account setup codes in Settings: 6 digits by default or 12 digits. Codes expire after 24 hours and work once. Setup attempts are rate limited. Previously issued long-format codes remain valid until expiry.
+
 Andrew can create private chats without joining, add or remove any participant, and retain empty conversations with their history. He can review every chat and add himself when he wants to send. Only Andrew can delete a private conversation or clear the shared room, including attached files. Deletions notify participants live, revoke file access and remove stored objects. Default conversations are not recreated automatically after Andrew deletes them.
 
 ## Browser and media verification

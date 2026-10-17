@@ -208,3 +208,4 @@
   .brand:hover .brand-spark, .brand:focus-visible .brand-spark,
   .brand:hover .brand-mark::before, .brand:focus-visible .brand-mark::before { animation: none; }
 }
+.code-length-setting{display:grid;gap:12px;padding:15px;margin:16px 0;background:#fafbf8;border:1px solid #e5e9e0;border-radius:10px}.code-length-setting strong{font-size:12px}.code-length-setting p{margin:4px 0 0;color:#788073;font-size:11px;line-height:1.5}.code-length-setting .auth-tabs button{font-size:11px}

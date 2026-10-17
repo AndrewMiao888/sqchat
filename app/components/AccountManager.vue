@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Account } from '#shared/types/auth'
 const { api } = useAuth()
+const { data: codeLength, refresh: refreshCodeLength } = await useAsyncData('setup-code-length', () => api<{ length: 'short' | 'long' }>('/api/admin/setup-code-length'), { default: () => ({ length: 'short' as const }) })
 const { data: accounts, refresh } = await useAsyncData('accounts', () => api<Account[]>('/api/admin/accounts'), { default: () => [] })
 const visible = computed(() => accounts.value.filter(account => account.status !== 'disabled'))
 const removed = computed(() => accounts.value.filter(account => account.status === 'disabled'))
@@ -11,6 +12,7 @@ const invitation = ref<{ code: string; name: string } | null>(null)
 const confirmation = ref<{ id: string; action: string; name: string } | null>(null)
 const resetConfirm = ref(false)
 const newName = ref('')
+const savingCodeLength = ref(false)
 useChatEvents(() => { void refresh() })
 function ask(account: Account, action: string) {
   confirmation.value = { id: account.id, name: account.name, action }; resetConfirm.value = false
@@ -51,10 +53,21 @@ async function copy() {
   try { await navigator.clipboard.writeText(invitation.value!.code); status.value = 'Setup code copied.' }
   catch { status.value = 'Select the code and copy it manually.' }
 }
+async function saveCodeLength(length: 'short' | 'long') {
+  if (savingCodeLength.value || codeLength.value.length === length) return
+  savingCodeLength.value = true; failure.value = ''; status.value = ''
+  try {
+    await api('/api/admin/setup-code-length', { method: 'PUT', body: { length } })
+    await refreshCodeLength()
+    status.value = `New setup codes will be ${length === 'short' ? '6-digit' : '12-digit'} numbers.`
+  } catch (error: any) { failure.value = error?.data?.statusMessage || 'Could not change setup code length.' }
+  finally { savingCodeLength.value = false }
+}
 </script>
 <template>
   <section class="manage-card people-card"><div class="card-title"><span class="card-icon"><UiIcon name="users" /></span><div><h2>Accounts <span class="message-count">{{ visible.length }}</span></h2><p>You approve who joins and who may change a password.</p></div></div>
     <p class="people-card-note">Confirm who owns each name before sharing a setup code. Default accounts cannot be deleted. You also control shared-room access. Removing access keeps every message.</p>
+    <div class="code-length-setting"><div><strong>Setup code length</strong><p>New one-use codes are numeric and expire in 24 hours.</p></div><div class="auth-tabs" role="group" aria-label="Setup code length"><button type="button" :class="{ active: codeLength.length === 'short' }" :aria-pressed="codeLength.length === 'short'" :disabled="savingCodeLength" @click="saveCodeLength('short')">Short · 6 digits</button><button type="button" :class="{ active: codeLength.length === 'long' }" :aria-pressed="codeLength.length === 'long'" :disabled="savingCodeLength" @click="saveCodeLength('long')">Long · 12 digits</button></div></div>
     <form class="add-name-form admin-add-name" @submit.prevent="add"><label for="admin-new-name">Add a name</label><div class="add-name-row"><input id="admin-new-name" v-model="newName" maxlength="24" placeholder="New member’s name" required><button :disabled="busy || !newName.trim()" aria-label="Add name"><UiIcon name="plus" /></button></div></form>
     <div v-if="invitation" class="invite-card" role="status"><strong>Setup code for {{ invitation.name }}</strong><p>Share this privately with {{ invitation.name }}. They choose “Set password” on the sign-in page. This code works once and expires in 24 hours.</p><input :value="invitation.code" readonly aria-label="One-use setup code" @focus="($event.target as HTMLInputElement).select()"><div class="message-actions"><button class="small-primary" @click="copy"><UiIcon name="copy" /> Copy code</button><button class="plain-button" @click="invitation = null">Dismiss</button></div></div>
     <p v-if="status" class="settings-feedback-success" role="status">{{ status }}</p><p v-if="failure" class="form-error" role="alert">{{ failure }}</p>

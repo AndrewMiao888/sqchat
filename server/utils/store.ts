@@ -44,6 +44,7 @@ export async function store() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), edited_at TIMESTAMPTZ
       )`,
       db`CREATE TABLE IF NOT EXISTS chat_settings (id BOOLEAN PRIMARY KEY DEFAULT TRUE, data JSONB NOT NULL)`,
+      db`CREATE TABLE IF NOT EXISTS sq_config (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
       db`CREATE TABLE IF NOT EXISTS chat_people (name_key TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`
     ])
     await db`CREATE TABLE IF NOT EXISTS sq_thread_members (

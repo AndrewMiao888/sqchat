@@ -48,14 +48,14 @@ useHead({ title: 'Sign in · SQ Chat' })
         <p class="auth-description">{{ tab === 'login' ? 'Sign in with your name and password.' : tab === 'request' ? 'Andrew approves every account before its owner sets a password.' : 'Enter the one-use setup code Andrew shared with you, then choose your own password.' }}</p>
         <form class="settings-form" @submit.prevent="submit">
           <label v-if="tab !== 'setup'">Your name<input v-model="name" maxlength="24" autocomplete="username" placeholder="e.g. Andrew" required :disabled="busy"></label>
-          <label v-if="tab === 'setup'">Setup code<input v-model="code" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" required :disabled="busy"></label>
+          <label v-if="tab === 'setup'">Numeric setup code<input v-model="code" maxlength="43" inputmode="numeric" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" placeholder="Enter the code Andrew shared" required :disabled="busy"></label>
           <label v-if="tab !== 'request'">{{ tab === 'setup' ? 'Choose a password' : 'Password' }}<input v-model="password" type="password" :autocomplete="tab === 'setup' ? 'new-password' : 'current-password'" :minlength="tab === 'setup' ? 12 : 1" maxlength="128" required :disabled="busy"></label>
           <label v-if="tab === 'setup'">Confirm password<input v-model="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required :disabled="busy"></label>
           <p v-if="tab === 'setup'" class="field-help">Use 12–128 characters. A long, unique passphrase works well. Future password changes need Andrew’s approval.</p>
           <p v-if="failure" class="form-error" role="alert">{{ failure }}</p><p v-if="success" class="settings-feedback-success" role="status">{{ success }}</p>
           <button class="primary-button" type="submit" :disabled="busy">{{ busy ? 'Please wait…' : tab === 'login' ? 'Sign in' : tab === 'request' ? 'Request access' : 'Save my password' }}<UiIcon name="arrow-right" /></button>
         </form>
-        <p class="auth-footer">{{ tab === 'login' ? 'Forgot your password? Ask Andrew for a reset code, then choose Set password.' : 'Already approved? Andrew will give you a code directly. Codes expire after 24 hours.' }}</p>
+        <p class="auth-footer">{{ tab === 'login' ? 'Forgot your password? Ask Andrew for a reset code, then choose Set password.' : 'Already approved? Andrew will give you a numeric code directly. Codes expire after 24 hours.' }}</p>
       </section>
     </main>
     <p class="privacy-note"><UiIcon name="lock" /> Private chats are visible to their participants and Andrew, the room administrator.</p>
