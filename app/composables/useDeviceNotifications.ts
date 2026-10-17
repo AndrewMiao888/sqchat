@@ -43,8 +43,13 @@ export function useDeviceNotifications() {
     finally { busy.value = false }
   }
   async function test() {
-    try { await (await registration()).showNotification('SQ Chat', { body: 'Device notifications are enabled.', icon: '/icon-192.png', tag: 'sq-test' }) }
-    catch { status.value = 'Check your device notification settings and try again.' }
+    status.value = 'Sending a test through the push service…'
+    try {
+      const result = await api<{ sent: boolean; statusCode?: number; message?: string }>('/api/push/test', { method: 'POST', body: {} })
+      status.value = result.sent
+        ? 'The push service accepted the test. Check this device’s notification centre; delivery can take a moment.'
+        : result.message || 'The push test could not be sent.'
+    } catch (error: any) { status.value = error?.data?.statusMessage || 'Could not send the push test. Please try again.' }
   }
   return { enabled, supported, busy, status, sync, toggle, test }
 }

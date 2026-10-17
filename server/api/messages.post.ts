@@ -18,6 +18,6 @@ export default defineEventHandler(async (event) => {
   await rateLimit(`message:${user.id}`, 1, 2)
   const conversation = typeof input?.conversation === 'string' && input.conversation ? input.conversation : null
   const result = await addMessage(user, body, conversation, effects, attachments, replyTo)
-  event.waitUntil(pushMessage(user.id, conversation, result.id).catch(() => console.warn('Push dispatch unavailable')))
+  await pushMessage(user.id, conversation, result.id).catch(() => console.warn('Push dispatch unavailable'))
   return result
 })

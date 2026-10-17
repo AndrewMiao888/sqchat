@@ -37,15 +37,44 @@ export async function pushMessage(senderId: string, conversation: string | null,
   const keys = await pushKeys()
   const payload = JSON.stringify({ title: 'SQ Chat', body: 'You have a new message.', tag: messageId,
     url: conversation ? '/?chat=' + encodeURIComponent(conversation) : '/' })
-  await Promise.allSettled(rows.map(async row => {
+  await Promise.all(rows.map(async row => {
     if (!validSubscription(row.subscription)) return
     try {
       await webpush.sendNotification(row.subscription, payload, {
         vapidDetails: { subject: 'https://sqchat.vercel.app', ...keys }, TTL: 3600, urgency: 'high', timeout: 5000
       })
+      return { status: 'accepted' as const }
     } catch (error: any) {
       if (error.statusCode === 404 || error.statusCode === 410) await db`DELETE FROM sq_push WHERE endpoint = ${row.endpoint}`
-      else console.warn('Push delivery failed', Number(error.statusCode) || 'network')
+      return { status: 'failed' as const, code: Number(error.statusCode) || 0 }
     }
   }))
+}
+
+export async function sendTestPush(sessionHash: string) {
+  const db = await store()
+  const rows = await db`SELECT p.endpoint, p.subscription FROM sq_push p
+    JOIN sq_sessions s ON s.token_hash = p.session_hash JOIN sq_users u ON u.id = s.user_id
+    WHERE p.session_hash = ${sessionHash} AND u.status = 'active' AND s.session_version = u.session_version
+      AND s.expires_at > NOW() AND s.last_seen > NOW() - INTERVAL '365 days' LIMIT 1`
+  const row = rows[0]
+  if (!row || !validSubscription(row.subscription)) {
+    return { sent: false, message: 'No active device subscription was found. Turn notifications off, then enable them again.' }
+  }
+  const keys = await pushKeys()
+  try {
+    const result = await webpush.sendNotification(row.subscription, JSON.stringify({
+      title: 'SQ Chat', body: 'This device can receive SQ Chat notifications.', tag: 'sq-push-test', url: '/'
+    }), { vapidDetails: { subject: 'https://sqchat.vercel.app', ...keys }, TTL: 60, urgency: 'high', timeout: 10000 })
+    return { sent: true, statusCode: result.statusCode }
+  } catch (error: any) {
+    if (error.statusCode === 404 || error.statusCode === 410) await db`DELETE FROM sq_push WHERE endpoint = ${row.endpoint}`
+    console.warn('Push test failed', Number(error.statusCode) || 'network')
+    return { sent: false, statusCode: Number(error.statusCode) || 0,
+      message: error.statusCode === 404 || error.statusCode === 410
+        ? 'The device push subscription expired. Turn notifications off, then enable them again.'
+        : error.statusCode === 401 || error.statusCode === 403
+          ? 'The push service rejected this device key. Turn notifications off, then enable them again.'
+          : 'The push service could not be reached. Check the network and try again.' }
+  }
 }
