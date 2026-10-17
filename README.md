@@ -65,9 +65,9 @@ Birthday, congratulations, new-year and selected holiday greetings trigger match
 
 ## Lucy and conversation deletion
 
-Lucy is a default private-only account, initialized using `SQ_LUCY_INITIAL_PASSWORD` and `scripts/initialize-lucy.mjs`. The script reuses an unclaimed Lucy profile, hashes the password, and creates a private Andrew-Lucy conversation without a setup code. It does not overwrite an established password. Lucy can start private chats with any approved active person, including groups. The server excludes her from the shared room and blocks shared posts, uploads and downloads. Her initial login opens her default private conversation.
+Lucy is a default private-only account, initialized using `SQ_LUCY_INITIAL_PASSWORD` and `scripts/initialize-lucy.mjs`. The script reuses an unclaimed Lucy profile, hashes the password, and creates a private Andrew-Lucy conversation without a setup code. It does not overwrite an established password. Lucy can start private chats with any approved active person, including groups. Shared-room access starts off. Andrew can allow or remove shared-room access for Lucy or any other member in Settings. Permission changes update open tabs immediately; removing access never deletes existing messages. Her initial login opens her default private conversation.
 
-Only Andrew can delete a private conversation or clear the shared room, including attached files. Deletions notify participants live, revoke file access and remove stored objects. Default conversations are not recreated automatically after Andrew deletes them.
+Andrew can create private chats without joining, add or remove any participant, and retain empty conversations with their history. He can review every chat and add himself when he wants to send. Only Andrew can delete a private conversation or clear the shared room, including attached files. Deletions notify participants live, revoke file access and remove stored objects. Default conversations are not recreated automatically after Andrew deletes them.
 
 ## Browser and media verification
 
@@ -82,3 +82,7 @@ This suite creates temporary accounts and private conversations, uploads generat
 ### Dependency audit (17 October 2026)
 
 Compatible audit fixes were applied. npm still reports 11 high findings inherited through build/development dependencies from two upstream advisories with no patched release: [braces recursion](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and [node-forge signature verification](https://github.com/advisories/GHSA-86w9-cpqp-85rv). Neither package is included in the built server dependencies, and chat requests do not call either library. Track upstream fixes; do not use the suggested forced Nuxt downgrade as an automatic remedy.
+
+## Replies and retained history
+
+Choose Reply under a message to quote it in the composer. Replies are live and support text, effects and attachments. Quoted previews are resolved from the original message in the same conversation, so Andrew's edits update quotes and deleting an original replaces its quote with a deletion notice. Invisible-ink originals have a concealed quote preview. Click a quote to jump to a loaded original; Load older messages retrieves earlier history in pages of 200. Loaded history refreshes with moderation changes. Messages are retained until Andrew deletes them or clears the conversation; changing account or room access never removes them.

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { TEXT_EFFECTS, BUBBLE_EFFECTS, SCREEN_EFFECTS, FILE_ACCEPT, MAX_ATTACHMENTS, MAX_FILE_SIZE, fileSize, type Attachment, type MessageEffects, type TextEffect, type ScreenEffect } from '#shared/types/media'
 import type { ChatMessage } from '#shared/types/chat'
-const props = defineProps<{ conversation: string; sender: string }>()
-const emit = defineEmits<{ sent: []; preview: [effect: ScreenEffect, text: string] }>()
+const props = defineProps<{ conversation: string; sender: string; replyTo?: ChatMessage | null }>()
+const emit = defineEmits<{ sent: []; cancelReply: []; preview: [effect: ScreenEffect, text: string] }>()
 const { api } = useAuth()
 const draft = ref(''), failure = ref(''), sending = ref(false), effectOpen = ref(false)
 const effectTab = ref<'text' | 'bubble' | 'screen'>('text')
@@ -18,7 +18,7 @@ const uploading = computed(() => uploads.value.some(file => file.status === 'upl
 const ready = computed(() => uploads.value.filter(file => file.status === 'ready'))
 const hasDraft = computed(() => !!draft.value.trim() || !!uploads.value.length)
 const canSend = computed(() => !sending.value && !uploading.value && !uploads.value.some(file => file.status === 'error') && (!!draft.value.trim() || !!ready.value.length))
-const previewMessage = computed<ChatMessage>(() => ({ id: 'preview', sender: props.sender, createdAt: new Date().toISOString(), body: draft.value.trim() || 'A little more expression.', effects: effects.value }))
+const previewMessage = computed<ChatMessage>(() => ({ id: 'preview', sender: props.sender, createdAt: new Date().toISOString(), body: draft.value.trim() || 'A little more expression.', effects: effects.value, replyTo: props.replyTo ? { id: props.replyTo.id, sender: props.replyTo.sender, body: props.replyTo.effects?.bubble === 'invisible' ? 'Invisible ink message' : props.replyTo.body.slice(0, 240) || 'Attachment' } : undefined }))
 let pressTimer: ReturnType<typeof setTimeout> | undefined
 let longPressed = false
 let disposed = false
@@ -65,11 +65,12 @@ async function removeUpload(file: Upload) {
   file.controller.abort(); uploads.value = uploads.value.filter(item => item.localId !== file.localId)
   if (file.id) await api(`/api/attachments/${file.id}`, { method: 'DELETE', body: {} }).catch(() => {})
 }
+watch(() => props.replyTo?.id, () => { if (props.replyTo) nextTick(() => textarea.value?.focus()) })
 async function send() {
   if (!canSend.value) return
   sending.value = true; failure.value = ''
   try {
-    await api('/api/messages', { method: 'POST', body: { body: draft.value.trim(), conversation: props.conversation, attachments: ready.value.map(file => file.id), effects: effects.value, autoScreen: autoScreen.value } })
+    await api('/api/messages', { method: 'POST', body: { body: draft.value.trim(), conversation: props.conversation, attachments: ready.value.map(file => file.id), effects: effects.value, autoScreen: autoScreen.value, replyTo: props.replyTo?.id } })
     draft.value = ''; uploads.value = []; effects.value = {}; effectOpen.value = false; emit('sent'); textarea.value?.focus()
   } catch (error: any) { failure.value = error?.data?.statusMessage || 'Message could not be sent. Your draft is still here.' }
   finally { sending.value = false }
@@ -82,6 +83,7 @@ onBeforeUnmount(() => { disposed = true; endPress(); for (const file of uploads.
 <template>
   <form class="composer rich-composer" @submit.prevent="send" @dragover.prevent @drop.prevent="attach($event.dataTransfer?.files || null)">
     <div class="composer-identity"><span>Sending as <strong>{{ sender }}</strong></span><span class="composer-tip">Enter to send · Hold send for effects</span></div>
+    <div v-if="replyTo" class="reply-draft"><UiIcon name="reply" /><div><strong>Replying to {{ replyTo.sender }}</strong><p>{{ replyTo.effects?.bubble === 'invisible' ? 'Invisible ink message' : replyTo.body.slice(0, 160) || 'Attachment' }}</p></div><button class="plain-button" type="button" aria-label="Cancel reply" @click="emit('cancelReply')"><UiIcon name="close" /></button></div>
     <div v-if="uploads.length" class="upload-tray"><div v-for="file in uploads" :key="file.localId" class="upload-item"><UiIcon :name="file.type.startsWith('image/') ? 'image' : 'file'" /><div><strong>{{ file.name }}</strong><small>{{ file.status === 'uploading' ? `Uploading ${file.progress}%` : file.status === 'error' ? file.error : fileSize(file.size) + ' / Ready' }}</small><progress v-if="file.status === 'uploading'" :value="file.progress" max="100"></progress></div><button type="button" :aria-label="`Remove ${file.name}`" @click="removeUpload(file)"><UiIcon name="close" /></button></div></div>
     <div class="composer-box"><textarea ref="textarea" v-model="draft" aria-label="Your message" placeholder="Write a message or drop a file..." rows="2" maxlength="1000" :disabled="sending" @keydown="keydown" @select="captureSelection" @keyup="captureSelection" @mouseup="captureSelection" @input="textChanged" @paste="event => { if (event.clipboardData?.files.length) { event.preventDefault(); attach(event.clipboardData.files) } }"></textarea><button class="send-button" type="button" :disabled="!canSend" :aria-label="sending ? 'Sending message' : 'Send message. Hold for effects.'" @click="sendClick" @pointerdown="startPress" @pointerup="endPress" @pointercancel="endPress" @pointerleave="endPress" @contextmenu.prevent="effectOpen = true; effectTab = 'bubble'"><UiIcon name="arrow-up" /></button></div>
     <div class="composer-tools"><input ref="picker" type="file" multiple :accept="FILE_ACCEPT" hidden @change="attach(($event.target as HTMLInputElement).files)"><button class="plain-button" type="button" :disabled="sending || uploads.length >= MAX_ATTACHMENTS" @click="picker?.click()"><UiIcon name="paperclip" /> Attach</button><button class="plain-button" type="button" :aria-expanded="effectOpen" @click="effectOpen = !effectOpen"><SparkIcon /> Effects<span v-if="effects.text?.length || effects.bubble || effects.screen" class="effect-active-dot"></span></button><span class="composer-limit">{{ draft.length }}/1000 · 20 MB per file</span></div>

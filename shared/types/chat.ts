@@ -12,6 +12,7 @@ export interface ChatMessage {
   editedAt?: string
   attachments?: Attachment[]
   effects?: MessageEffects
+  replyTo?: { id: string; sender: string; body: string; deleted?: boolean }
 }
 
 export interface ChatSettings {
@@ -37,6 +38,8 @@ export interface ChatState {
   members: { id: string; name: string }[]
   conversations: Conversation[]
   conversation: string | null
+  hasMore?: boolean
+  nextCursor?: string | null
   canSend: boolean
 }
 

@@ -6,8 +6,9 @@ export default defineEventHandler(async event => {
   const { user } = await requireAuth(event)
   await rateLimit(`new-chat:${user.id}`, 20, 600)
   const input = await readBody(event)
-  const ids = [...new Set<string>([user.id, ...(Array.isArray(input?.userIds) ? input.userIds.filter((id: unknown) => typeof id === 'string') : [])])]
-  if (ids.length < 2 || ids.length > 23) throw createError({ statusCode: 400, statusMessage: 'Choose at least one other person, up to 23 people per chat.' })
+  if (input?.includeSelf === false && user.role !== 'admin') throw createError({ statusCode: 403, statusMessage: 'Only Andrew can create chats without joining them.' })
+  const ids = [...new Set<string>([...(input?.includeSelf === false ? [] : [user.id]), ...(Array.isArray(input?.userIds) ? input.userIds.filter((id: unknown) => typeof id === 'string') : [])])]
+  if (ids.length < 2 || ids.length > 24) throw createError({ statusCode: 400, statusMessage: 'Choose at least two participants, up to 24 people per chat.' })
   const title = input?.title ? cleanText(input.title, 70) : ''
   if (title === null) throw createError({ statusCode: 400, statusMessage: 'Keep the conversation name under 70 characters.' })
   const db = await store()

@@ -13,6 +13,10 @@ export default defineEventHandler(async event => {
   if (target.role === 'admin') throw createError({ statusCode: 403, statusMessage: 'Manage your own password and sessions from My account.' })
   let code: string | undefined
   switch (input.action) {
+    case 'allow-shared':
+    case 'block-shared':
+      await db`UPDATE sq_users SET private_only = ${input.action === 'block-shared'} WHERE id = ${target.id}`
+      break
     case 'approve':
     case 'reset': {
       if (input.action === 'approve' && target.status === 'active') throw createError({ statusCode: 409, statusMessage: 'This account is already active.' })
@@ -39,7 +43,7 @@ export default defineEventHandler(async event => {
       ])
       break
     case 'delete':
-      if (target.builtin) throw createError({ statusCode: 403, statusMessage: 'Andrew, Darius and Harrison cannot be deleted.' })
+      if (target.builtin) throw createError({ statusCode: 403, statusMessage: 'Default accounts cannot be deleted.' })
       await db.transaction([
         db`UPDATE sq_users SET status = 'disabled', password_hash = NULL, password_change_until = NULL, session_version = session_version + 1 WHERE id = ${target.id}`,
         db`DELETE FROM sq_sessions WHERE user_id = ${target.id}`,

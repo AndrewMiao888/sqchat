@@ -3,9 +3,12 @@ import type { $Fetch } from 'ofetch'
 
 export function useAuth() {
   const auth = useState<AuthState>('auth', () => ({ user: null, csrf: '' }))
+  const loadVersion = useState('auth-load-version', () => 0)
   const request = useRequestFetch() as $Fetch
   async function load() {
-    auth.value = await request<AuthState>('/api/auth/me')
+    const version = ++loadVersion.value
+    const next = await request<AuthState>('/api/auth/me')
+    if (version === loadVersion.value) auth.value = next
     return auth.value.user
   }
   async function api<T = any>(path: string, options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'; body?: any; query?: Record<string, string> } = {}): Promise<T> {
@@ -21,6 +24,7 @@ export function useAuth() {
     }
   }
   async function logout(all = false) {
+    loadVersion.value++
     await api(all ? '/api/auth/revoke' : '/api/auth/logout', { method: 'POST', body: {} })
     auth.value = { user: null, csrf: '' }
     clearNuxtData()

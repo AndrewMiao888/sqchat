@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ChatMessage } from '#shared/types/chat'
 import type { TextEffect } from '#shared/types/media'
+defineEmits<{ jump: [id: string] }>()
 const props = withDefaults(defineProps<{ message: ChatMessage; animated?: boolean; play?: number }>(), { animated: true, play: 0 })
 const revealed = ref(false)
 const revealAt = ref<{ x: number; y: number } | null>(null)
@@ -27,6 +28,7 @@ onBeforeUnmount(() => clearTimeout(hideTimer))
   <div :key="play" class="message-presentation" :class="[{ 'effect-animated': animated, 'ink-message': invisible, 'ink-revealed': revealed }, message.effects?.bubble ? `bubble-effect-${message.effects.bubble}` : '']">
     <div class="message-bubble effect-bubble" @pointermove="scratch">
       <div :class="{ 'ink-content': invisible }" :aria-hidden="invisible && !revealed ? 'true' : undefined" :inert="invisible && !revealed ? true : undefined">
+        <button v-if="message.replyTo" type="button" class="reply-quote" :disabled="message.replyTo.deleted" @click="$emit('jump', message.replyTo.id)"><UiIcon name="reply" /><span><strong>{{ message.replyTo.sender || 'Original message' }}</strong><span>{{ message.replyTo.body }}</span></span></button>
         <p v-if="message.body" class="effect-text" :aria-label="message.body"><span v-if="!message.effects?.text?.length">{{ message.body }}</span><template v-else><span v-for="char in characters" :key="char.index" :class="char.effect && !/\s/.test(char.text) ? ['effect-character', `text-effect-${char.effect}`] : ''" :style="{ '--i': char.index % 24, '--dx': `${((char.index * 37) % 121) - 60}px`, '--dy': `${((char.index * 53) % 101) - 50}px`, '--turn': `${((char.index * 29) % 91) - 45}deg` }" aria-hidden="true">{{ char.text }}</span></template></p>
         <AttachmentList v-if="message.attachments?.length" :files="message.attachments" />
       </div>

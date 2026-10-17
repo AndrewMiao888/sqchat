@@ -18,3 +18,10 @@
 .conversation-list .person-name{flex:1}.conversation-list .person-button>.ui-icon{width:14px;height:14px}.conversation-list{max-height:210px}
 .chat-layout{margin-top:12px;gap:12px}.chat-panel{height:calc(100dvh - 145px);min-height:480px;max-height:none}.mobile-open .side-divider{margin:14px 0}
 }
+
+.reply-quote{display:flex;gap:8px;width:100%;text-align:left;padding:9px 11px;margin:0 0 9px;border:0;border-left:3px solid var(--chat-accent,#52745a);border-radius:5px;background:color-mix(in srgb,var(--chat-accent,#52745a) 8%,var(--chat-panel-bg,#fff));color:inherit;font:inherit;font-size:11px;line-height:1.5;white-space:normal}
+.reply-quote>span{min-width:0}.reply-quote strong,.reply-quote span span{display:block}.reply-quote span span{margin-top:3px;overflow-wrap:anywhere}.reply-quote:disabled{opacity:.65;cursor:default}.reply-quote svg,.reply-action svg{width:13px;height:13px;flex-shrink:0}.reply-action{display:inline-flex;align-items:center;gap:5px;font-size:10px;margin-top:7px;margin-right:14px}.reply-draft{display:flex;align-items:center;gap:10px;border-left:3px solid var(--chat-accent,#52745a);background:var(--chat-bubble-bg,#f5f6f2);padding:10px 12px;border-radius:5px;margin-bottom:12px;font-size:11px}.reply-draft>div{flex:1;min-width:0}.reply-draft p{margin:4px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.message-row:focus{outline:2px solid var(--chat-accent,#52745a);outline-offset:6px;border-radius:8px}
+
+.load-history{display:block;margin:0 auto 22px;padding:8px 14px;border:1px solid #dfe5d6;border-radius:20px}
+
+.settings-form .include-self{display:flex;align-items:center;gap:9px;font-weight:500}.settings-form .include-self input{width:16px;height:16px;margin:0;padding:0}.member-chips button{display:inline-flex;align-items:center}.member-chips button svg{width:14px;height:14px}

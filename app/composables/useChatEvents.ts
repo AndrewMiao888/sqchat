@@ -6,6 +6,8 @@ export function useChatEvents(onChange: () => void) {
   const update = () => {
     connection.value = 'live'
     onChange()
+    // Account permissions can change while this tab remains open.
+    void load().catch(() => {})
   }
 
   const onVisibilityChange = () => {

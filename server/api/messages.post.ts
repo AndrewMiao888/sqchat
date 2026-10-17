@@ -12,6 +12,8 @@ export default defineEventHandler(async (event) => {
   const body = input?.body === '' && attachments.length ? '' : cleanText(input?.body, 1000)
   if (body === null || body === undefined) throw createError({ statusCode: 400, statusMessage: 'Write a message under 1,000 characters or attach a file.' })
   const effects = messageEffects(input?.effects, body, input?.autoScreen !== false)
+  const replyTo = input?.replyTo || null
+  if (replyTo !== null && (typeof replyTo !== 'string' || replyTo.length > 100)) throw createError({ statusCode: 400, statusMessage: 'Choose a message to reply to.' })
   await rateLimit(`message:${user.id}`, 1, 2)
-  return addMessage(user, body, typeof input?.conversation === 'string' && input.conversation ? input.conversation : null, effects, attachments)
+  return addMessage(user, body, typeof input?.conversation === 'string' && input.conversation ? input.conversation : null, effects, attachments, replyTo)
 })

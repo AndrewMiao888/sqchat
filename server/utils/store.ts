@@ -67,6 +67,8 @@ export async function store() {
     await Promise.all([
       db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
       db`ALTER TABLE sq_private_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to TEXT`,
+      db`ALTER TABLE sq_private_messages ADD COLUMN IF NOT EXISTS reply_to TEXT`,
       db`CREATE TABLE IF NOT EXISTS sq_attachments (
         id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES sq_users(id), thread_id TEXT REFERENCES sq_threads(id),
         message_id TEXT, name TEXT NOT NULL, content_type TEXT NOT NULL, size BIGINT NOT NULL,
