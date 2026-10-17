@@ -23,10 +23,12 @@ try {
   const discovery = await pageFor(), sources = new Map(), reads = []
   discovery.on('response', response => { if (/\/_nuxt\/[^/]+\.js(?:\?|$)/.test(response.url())) reads.push(response.text().then(text => sources.set(response.url(), text)).catch(() => {})) })
   await discovery.goto(base.href, { waitUntil: 'domcontentloaded' })
-  await expect(discovery.getByRole('textbox', { name: 'Your message' })).toBeVisible()
+  await expect(discovery.getByRole('textbox', { name: 'Your message' })).toBeEnabled()
   await discovery.getByRole('link', { name: 'Andrew', exact: true }).click()
   await expect(discovery.getByRole('heading', { name: 'Your sessions' })).toBeVisible()
   await Promise.all(reads)
+  await expect.poll(() => [...sources.values()].some(text => text.includes('Group conversation'))).toBe(true)
+  await expect.poll(() => [...sources.values()].some(text => text.includes('Current password'))).toBe(true)
   const chatChunk = [...sources].find(([, text]) => text.includes('Group conversation'))?.[0]
   const accountChunk = [...sources].find(([, text]) => text.includes('Current password'))?.[0]
   assert(chatChunk && accountChunk, 'Route chunks discovered')
@@ -36,7 +38,7 @@ try {
   initial.on('request', request => { if (request.resourceType() === 'document') documents++ })
   await initial.route(chatChunk, route => { if (documents === 1) { failures++; return route.abort('failed') }; return route.continue() })
   await initial.goto(base.href, { waitUntil: 'domcontentloaded' })
-  await expect(initial.getByRole('textbox', { name: 'Your message' })).toBeVisible()
+  await expect(initial.getByRole('textbox', { name: 'Your message' })).toBeEnabled()
   await expect.poll(() => documents).toBe(2)
   await expect(initial).not.toHaveURL(/_sq_retry/)
   check(failures > 0, 'a failed initial chat module automatically recovers once')
@@ -47,7 +49,7 @@ try {
   navigation.on('request', request => { if (request.resourceType() === 'document') navigationDocuments++ })
   await navigation.route(accountChunk, route => { if (navigationDocuments === 1) { navigationFailures++; return route.abort('failed') }; return route.continue() })
   await navigation.goto(base.href, { waitUntil: 'domcontentloaded' })
-  await expect(navigation.getByRole('textbox', { name: 'Your message' })).toBeVisible()
+  await expect(navigation.getByRole('textbox', { name: 'Your message' })).toBeEnabled()
   await navigation.getByRole('link', { name: 'Andrew', exact: true }).click()
   await expect(navigation.getByRole('heading', { name: 'Your sessions' })).toBeVisible()
   check(navigationDocuments === 2 && navigationFailures > 0 && new URL(navigation.url()).pathname === '/account', 'failed navigation recovers at the intended destination')
@@ -64,7 +66,7 @@ try {
   check(persistentDocuments === 2, 'persistent failure stops after one automatic retry and offers a recovery screen')
   await persistent.unroute(chatChunk)
   await persistent.getByRole('button', { name: 'Try again', exact: true }).click()
-  await expect(persistent.getByRole('textbox', { name: 'Your message' })).toBeVisible()
+  await expect(persistent.getByRole('textbox', { name: 'Your message' })).toBeEnabled()
   check(persistentDocuments === 3 && await storageEmpty(persistent), 'manual retry restores the chat without browser storage')
   await persistent.context().close()
 
