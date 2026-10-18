@@ -6,7 +6,8 @@ export default defineEventHandler(async event => {
   await db.transaction([
     db`UPDATE sq_users SET status = 'disabled', password_hash = NULL, password_change_until = NULL, session_version = session_version + 1 WHERE NOT builtin`,
     db`DELETE FROM sq_sessions WHERE user_id IN (SELECT id FROM sq_users WHERE NOT builtin)`,
-    db`DELETE FROM sq_invites WHERE user_id IN (SELECT id FROM sq_users WHERE NOT builtin)`
+    db`UPDATE sq_invites SET revoked_at = NOW() WHERE user_id IN (SELECT id FROM sq_users WHERE NOT builtin)
+      AND used_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()`
   ])
   await audit(user.id, 'accounts.reset-defaults')
   await signal()

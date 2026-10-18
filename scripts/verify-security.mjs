@@ -84,8 +84,21 @@ try {
       await call(null, '/api/auth/login', 'POST', { name: account.name, password: account.password }, 401)
       check(true, 'pending account cannot sign in')
     }
-    const approved = (await call(admin, '/api/admin/accounts', 'POST', { id: account.id, action: 'approve' })).data
+    let approved = (await call(admin, '/api/admin/accounts', 'POST', { id: account.id, action: 'approve' })).data
+    let archived = (await call(admin, '/api/admin/setup-codes')).data.find(item => item.code === approved.code)
+    check(archived?.name === account.name && archived.status === 'active' &&
+      (new Date(archived.expiresAt).getTime() - Date.now()) > 71 * 3600000,
+    'Andrew can reopen a new code from the 3-day store')
+    if (suffix === 'A') {
+      await call(null, '/api/admin/setup-codes', 'GET', undefined, 401)
+      await call(admin, `/api/admin/setup-codes/${archived.id}`, 'DELETE')
+      await call(null, '/api/auth/setup', 'POST', { code: approved.code, password: account.password }, 400)
+      check(!(await call(admin, '/api/admin/setup-codes')).data.some(item => item.id === archived.id), 'Andrew can delete a code early and revoke it immediately')
+      approved = (await call(admin, '/api/admin/accounts', 'POST', { id: account.id, action: 'approve' })).data
+      archived = (await call(admin, '/api/admin/setup-codes')).data.find(item => item.code === approved.code)
+    }
     await call(null, '/api/auth/setup', 'POST', { code: approved.code, password: account.password })
+    check((await call(admin, '/api/admin/setup-codes')).data.find(item => item.id === archived.id)?.status === 'used', 'used code remains in Andrew’s store but cannot be reused')
     if (suffix === 'A') {
       await call(null, '/api/auth/setup', 'POST', { code: approved.code, password: account.password }, 400)
       check(true, 'setup code cannot be reused')

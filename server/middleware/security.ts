@@ -1,6 +1,6 @@
 import { getAuth, requireAuth, checkCsrf, clientKey, rateLimit } from '../utils/auth'
 
-const anonymous = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/request'])
+const anonymous = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/request', '/api/cron/expire-codes'])
 
 export default defineEventHandler(async event => {
   setHeaders(event, {

@@ -5,7 +5,7 @@ Nuxt 4 chat with a shared room and private conversations for two or more people.
 ## Accounts
 
 - Andrew is the only administrator and the only person with access to the CMS.
-- Andrew approves Darius, Harrison, and additional accounts, then privately shares a one-use setup code. Codes expire after 24 hours. Owners choose their passwords; Andrew does not see them.
+- Andrew approves Darius, Harrison, and additional accounts, then privately shares a one-use setup code. New codes expire after 3 days. Andrew can reopen or delete them in the Code store until expiry. Owners choose their passwords; Andrew does not see them.
 - Members need Andrew's one-use, 24-hour permission to change their password. A forgotten password can be reset by Andrew issuing a new setup code. Changes and resets revoke sessions immediately.
 - Andrew, Darius, Harrison, and Lucy cannot be deleted. Removing an additional account revokes access and preserves history. Reset names keeps these default accounts and preserves their credentials.
 - Password login only. Andrew's initial password is provisioned separately and is never included in source code, client assets, or logs. It is not forcibly changed.
@@ -16,7 +16,7 @@ The CMS controls room text, colours, fonts, bubble shape, message entrances, tex
 
 Postgres `LISTEN/NOTIFY` and authenticated server-sent events update open pages without refreshes. Private change notifications go only to participants and Andrew. Streams reconnect and recheck sessions. Browser state uses memory and an HttpOnly session cookie; no localStorage or sessionStorage is used. Chat data is stored in Postgres.
 
-Passwords use salted scrypt (`N=131072, r=8, p=1`). Session tokens are random 256-bit values; setup codes are random 6- or 12-digit numbers; only their hashes are stored. Production cookies use `__Host-`, Secure, HttpOnly and SameSite Strict. Sessions renew while used and expire after one year without activity, with no fixed lifetime limit. Credential versions invalidate concurrent stale logins after a reset or revocation. There are limits on sign-in attempts, messages, writes, and concurrent live tabs; mutation requests require same-origin JSON and a CSRF token. The server checks permissions on every protected API request and uses parameterized SQL. Responses use no-store, nonce CSP, frame protection, HSTS, and other restrictive headers. Andrew can review an audit log that excludes passwords and message contents.
+Passwords use salted scrypt (`N=131072, r=8, p=1`). Session tokens are random 256-bit values; setup codes are random 6- or 12-digit numbers. New codes are stored as hashes for verification and encrypted for Andrew's 3-day Code store. Production cookies use `__Host-`, Secure, HttpOnly and SameSite Strict. Sessions renew while used and expire after one year without activity, with no fixed lifetime limit. Credential versions invalidate concurrent stale logins after a reset or revocation. There are limits on sign-in attempts, messages, writes, and concurrent live tabs; mutation requests require same-origin JSON and a CSRF token. The server checks permissions on every protected API request and uses parameterized SQL. Responses use no-store, nonce CSP, frame protection, HSTS, and other restrictive headers. Andrew can review an audit log that excludes passwords and message contents.
 
 ## Local development
 
@@ -67,7 +67,7 @@ Birthday, congratulations, new-year and selected holiday greetings trigger match
 
 Lucy is a default private-only account, initialized using `SQ_LUCY_INITIAL_PASSWORD` and `scripts/initialize-lucy.mjs`. The script reuses an unclaimed Lucy profile, hashes the password, and creates a private Andrew-Lucy conversation without a setup code. It does not overwrite an established password. Lucy can start private chats with any approved active person, including groups. Shared-room access starts off. Andrew can allow or remove shared-room access for Lucy or any other member in Settings. Permission changes update open tabs immediately; removing access never deletes existing messages. Her initial login opens her default private conversation.
 
-Andrew chooses the length of newly issued numeric account setup codes in Settings: 6 digits by default or 12 digits. Codes expire after 24 hours and work once. Setup attempts are rate limited. Previously issued long-format codes remain valid until expiry.
+Andrew chooses the length of newly issued numeric account setup codes in Settings: 6 digits by default or 12 digits. New codes expire after 3 days and work once. Used and replaced codes stay in the Code store until their original expiry, when daily cleanup removes them; any code can be deleted early. Setup attempts are rate limited. Codes issued before the archive upgrade keep their original expiry and are not recoverable from their hashes.
 
 Andrew can create private chats without joining, add or remove any participant, and retain empty conversations with their history. He can review every chat and add himself when he wants to send. Only Andrew can delete a private conversation or clear the shared room, including attached files. Deletions notify participants live, revoke file access and remove stored objects. Default conversations are not recreated automatically after Andrew deletes them.
 

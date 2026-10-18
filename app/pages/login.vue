@@ -57,7 +57,7 @@ useHead({ title: 'Sign in · SQ Chat' })
           <p v-if="failure" class="form-error" role="alert">{{ failure }}</p><p v-if="success" class="settings-feedback-success" role="status">{{ success }}</p>
           <button class="primary-button" type="submit" :disabled="busy">{{ busy ? 'Please wait…' : tab === 'login' ? 'Sign in' : tab === 'request' ? 'Request access' : 'Save my password' }}<UiIcon name="arrow-right" /></button>
         </form>
-        <p class="auth-footer">{{ tab === 'login' ? 'Forgot your password? Ask Andrew for a reset code, then choose Set password.' : 'Already approved? Andrew will give you a numeric code directly. Codes expire after 24 hours.' }}</p>
+        <p class="auth-footer">{{ tab === 'login' ? 'Forgot your password? Ask Andrew for a reset code, then choose Set password.' : 'Already approved? Andrew will give you a numeric code directly. Codes expire after 3 days.' }}</p>
       </section>
     </main>
     <p class="privacy-note"><UiIcon name="lock" /> Private chats are visible to their participants and Andrew, the room administrator.</p>

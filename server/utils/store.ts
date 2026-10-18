@@ -51,6 +51,13 @@ export async function store() {
       endpoint TEXT PRIMARY KEY, session_hash TEXT NOT NULL REFERENCES sq_sessions(token_hash) ON DELETE CASCADE,
       subscription JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`
+    await Promise.all([
+      db`ALTER TABLE sq_invites ADD COLUMN IF NOT EXISTS id TEXT`,
+      db`ALTER TABLE sq_invites ADD COLUMN IF NOT EXISTS code_ciphertext TEXT`,
+      db`ALTER TABLE sq_invites ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ`,
+      db`ALTER TABLE sq_invites ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ`
+    ])
+    await db`CREATE UNIQUE INDEX IF NOT EXISTS sq_invites_id ON sq_invites(id)`
     await db`CREATE TABLE IF NOT EXISTS sq_thread_members (
       thread_id TEXT NOT NULL REFERENCES sq_threads(id), user_id TEXT NOT NULL REFERENCES sq_users(id),
       joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (thread_id, user_id)
