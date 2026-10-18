@@ -11,7 +11,7 @@ const SESSION_COOKIE_SECONDS = SESSION_IDLE_DAYS * 24 * 60 * 60
 
 export function publicAccount(row: any): Account {
   return { id: row.id, name: row.name, role: row.role, builtin: row.builtin, status: row.status,
-    privateOnly: !!row.private_only, homeConversation: row.home_thread || null, lastConversation: row.last_chat ?? null,
+    privateOnly: !!row.private_only, homeConversation: row.home_thread || null, lastConversation: row.last_chat ?? null, chatSort: row.chat_sort === 'contributed' ? 'contributed' : 'viewed',
     canChangePassword: row.role === 'admin' || !!(row.password_change_until && new Date(row.password_change_until).getTime() > Date.now()) }
 }
 

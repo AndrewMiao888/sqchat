@@ -46,6 +46,7 @@ function canOwnMessage(row: any, user: Account, conversation: string | null) {
 export async function getChatState(user: Account, conversation: string | null = null, before: { at: string; id: string } | null = null): Promise<ChatState> {
   const db = await store()
   const thread = conversation ? await findThread(user, conversation) : null
+  if (thread) await db`INSERT INTO sq_thread_views (user_id, thread_id, last_viewed) VALUES (${user.id}, ${conversation}, NOW()) ON CONFLICT (user_id, thread_id) DO UPDATE SET last_viewed = NOW()`
   const [rows, settings, members, threads] = await Promise.all([
     thread ? db`SELECT m.*, m.created_at::text AS cursor_at, u.name AS sender FROM (
       SELECT * FROM sq_private_messages WHERE thread_id = ${thread.id} AND (${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''})) ORDER BY created_at DESC, id DESC LIMIT 201
@@ -53,10 +54,12 @@ export async function getChatState(user: Account, conversation: string | null = 
       : user.privateOnly ? Promise.resolve([]) : db`SELECT m.*, m.created_at::text AS cursor_at FROM (SELECT * FROM chat_messages WHERE ${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''}) ORDER BY created_at DESC, id DESC LIMIT 201) m ORDER BY created_at, id`,
     db`SELECT data FROM chat_settings WHERE id = TRUE`,
     db`SELECT id, name, private_only FROM sq_users WHERE status = 'active' ORDER BY builtin DESC, created_at, name`,
-    db`SELECT t.*, COALESCE(json_agg(json_build_object('id', u.id, 'name', u.name, 'active', u.status = 'active') ORDER BY m.joined_at, u.name) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS members
+    db`SELECT t.*, COALESCE(json_agg(json_build_object('id', u.id, 'name', u.name, 'active', u.status = 'active') ORDER BY m.joined_at, u.name) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS members,
+      COALESCE(MAX(pm.created_at), t.created_at) AS last_contributed, COALESCE(MAX(v.last_viewed), to_timestamp(0)) AS last_viewed
       FROM sq_threads t LEFT JOIN sq_thread_members m ON m.thread_id = t.id LEFT JOIN sq_users u ON u.id = m.user_id
+      LEFT JOIN sq_private_messages pm ON pm.thread_id = t.id LEFT JOIN sq_thread_views v ON v.thread_id = t.id AND v.user_id = ${user.id}
       WHERE ${user.role === 'admin'} OR EXISTS (SELECT 1 FROM sq_thread_members own WHERE own.thread_id = t.id AND own.user_id = ${user.id})
-      GROUP BY t.id ORDER BY t.created_at DESC`
+      GROUP BY t.id ORDER BY CASE WHEN ${user.chatSort} = 'contributed' THEN COALESCE(MAX(pm.created_at), t.created_at) ELSE COALESCE(MAX(v.last_viewed), to_timestamp(0)) END DESC, t.created_at DESC`
   ])
   const messages = rows.slice(-200)
   const nextCursor = messages[0] ? Buffer.from(JSON.stringify({ at: messages[0].cursor_at, id: messages[0].id })).toString('base64url') : null

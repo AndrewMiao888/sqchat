@@ -6,6 +6,7 @@ export interface Account {
   privateOnly: boolean
   homeConversation: string | null
   lastConversation: string | null
+  chatSort: 'viewed' | 'contributed'
   status: 'pending' | 'approved' | 'active' | 'disabled'
   canChangePassword: boolean
 }

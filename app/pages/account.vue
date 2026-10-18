@@ -7,6 +7,7 @@ const confirmation = ref('')
 const busy = ref(false)
 const failure = ref('')
 const confirmLogout = ref(false)
+const chatSort = ref<'viewed' | 'contributed'>(auth.value.user?.chatSort || 'viewed')
 useChatEvents(() => { void load() })
 async function changePassword() {
   if (busy.value) return
@@ -25,16 +26,22 @@ async function signOut(all = false) {
   busy.value = true
   try { await logout(all) } catch { failure.value = 'Could not sign out. Please try again.'; busy.value = false }
 }
-useHead({ title: 'My account · SQ Chat' })
+useHead({ title: 'My account 路 SQ Chat' })
+async function saveChatSort(sort: 'viewed' | 'contributed') {
+  if (!auth.value.user || chatSort.value === sort) return
+  chatSort.value = sort
+  try { await api('/api/account/chat-sort', { method: 'PUT', body: { sort } }); auth.value.user.chatSort = sort }
+  catch (error: any) { failure.value = error?.data?.statusMessage || 'Could not save chat order.' }
+}
 </script>
 <template>
   <div class="site-shell">
     <header class="topbar"><BrandLogo /><span class="topbar-caption">My account</span><NuxtLink to="/" class="topbar-link"><UiIcon name="arrow-left" /> Back to chat</NuxtLink></header>
     <main class="account-main"><div class="account-heading"><span class="avatar" :class="personTone(auth.user?.name || '')">{{ personInitial(auth.user?.name || '') }}</span><div><h1>{{ auth.user?.name }}</h1><p>{{ auth.user?.role === 'admin' ? 'Room administrator' : 'Member' }}</p></div></div>
-      <NotificationSettings />
+      <NotificationSettings />`r`n      <section class="manage-card"><div class="card-title"><span class="card-icon"><UiIcon name="users" /></span><div><h2>Chat order</h2><p>Choose how your conversations are arranged.</p></div></div><div class="auth-tabs" role="group" aria-label="Chat order"><button type="button" :class="{ active: chatSort === 'viewed' }" :aria-pressed="chatSort === 'viewed'" @click="saveChatSort('viewed')">Last viewed</button><button type="button" :class="{ active: chatSort === 'contributed' }" :aria-pressed="chatSort === 'contributed'" @click="saveChatSort('contributed')">Last contributed to</button></div><p class="field-help">Your choice is saved to your account and applies on every device.</p></section>
       <section class="manage-card"><div class="card-title"><span class="card-icon"><UiIcon name="lock" /></span><div><h2>Password</h2><p>{{ auth.user?.canChangePassword ? 'Choose a unique password that you keep to yourself.' : 'Andrew needs to approve a password change first.' }}</p></div></div>
-        <form v-if="auth.user?.canChangePassword" class="settings-form" @submit.prevent="changePassword"><label>Current password<input v-model="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label><label>New password<input v-model="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm new password<input v-model="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="field-help">Use 12–128 characters. Saving signs out every device, including this one. {{ auth.user?.role === 'member' ? 'Andrew’s approval can be used once and expires after 24 hours.' : '' }}</p><button class="primary-button" type="submit" :disabled="busy">Save password <UiIcon name="arrow-right" /></button></form>
-        <p v-else class="field-help">Ask Andrew to select “Allow password change” for your account. This form will unlock here automatically.</p>
+        <form v-if="auth.user?.canChangePassword" class="settings-form" @submit.prevent="changePassword"><label>Current password<input v-model="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label><label>New password<input v-model="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><label>Confirm new password<input v-model="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="field-help">Use 12鈥?28 characters. Saving signs out every device, including this one. {{ auth.user?.role === 'member' ? 'Andrew鈥檚 approval can be used once and expires after 24 hours.' : '' }}</p><button class="primary-button" type="submit" :disabled="busy">Save password <UiIcon name="arrow-right" /></button></form>
+        <p v-else class="field-help">Ask Andrew to select 鈥淎llow password change鈥?for your account. This form will unlock here automatically.</p>
         <p v-if="failure" class="form-error" role="alert">{{ failure }}</p>
       </section>
       <section class="manage-card"><div class="card-title"><span class="card-icon"><UiIcon name="shield" /></span><div><h2>Your sessions</h2><p>Sign-ins stay active while you use SQ Chat and expire after one year without activity.</p></div></div><div class="account-actions"><button class="restore-button" :disabled="busy" @click="signOut()">Sign out here</button><button class="plain-button danger-button" :disabled="busy" @click="confirmLogout = !confirmLogout">Sign out all devices</button></div><div v-if="confirmLogout" class="restore-confirmation"><p>End every sign-in for your account? You can sign in again with your password.</p><button class="restore-confirm-button" :disabled="busy" @click="signOut(true)">Yes, sign out everywhere</button></div></section>
