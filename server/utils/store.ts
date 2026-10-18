@@ -62,6 +62,14 @@ export async function store() {
       thread_id TEXT NOT NULL REFERENCES sq_threads(id), user_id TEXT NOT NULL REFERENCES sq_users(id),
       joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (thread_id, user_id)
     )`
+    await db`CREATE TABLE IF NOT EXISTS sq_chat_requests (
+      id TEXT PRIMARY KEY, requester_id TEXT NOT NULL REFERENCES sq_users(id),
+      kind TEXT NOT NULL CHECK (kind IN ('create','add')),
+      thread_id TEXT REFERENCES sq_threads(id), title TEXT NOT NULL DEFAULT '',
+      user_ids JSONB NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), decided_at TIMESTAMPTZ
+    )`
+    await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_auto_approve BOOLEAN NOT NULL DEFAULT FALSE`
     await Promise.all([
       db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0`,
       db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS private_only BOOLEAN NOT NULL DEFAULT FALSE`,

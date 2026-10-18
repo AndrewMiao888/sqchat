@@ -116,6 +116,7 @@ useHead({ title: 'Manage chat / SQ Chat' })
           </form>
         </section>
         <div class="manage-side-column">
+        <ChatRequests />
         <AccountManager />
         <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon"><MessageIcon /></span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>
           <label class="conversation-filter">Conversation<select v-model="conversation"><option value="">Everyone / shared room</option><option v-for="thread in data.conversations" :key="thread.id" :value="thread.id">{{ threadLabel(thread) }}</option></select></label>

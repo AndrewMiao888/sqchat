@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { requireAuth, rateLimit } from '../utils/auth'
-import { store, audit } from '../utils/store'
+import { store, audit, signal } from '../utils/store'
 import { notifyThread, cleanText } from '../utils/chat'
+import { pushChatRequest } from '../utils/push'
 export default defineEventHandler(async event => {
   const { user } = await requireAuth(event)
   await rateLimit(`new-chat:${user.id}`, 20, 600)
@@ -19,6 +20,15 @@ export default defineEventHandler(async event => {
     const existing = await db`SELECT thread_id AS id FROM sq_thread_members GROUP BY thread_id
       HAVING COUNT(*) = 2 AND bool_and(user_id = ANY(${ids}::text[])) LIMIT 1`
     if (existing[0]) return { id: existing[0].id }
+  }
+  if (user.role !== 'admin' && !(await db`SELECT chat_auto_approve FROM sq_users WHERE id = ${user.id}`)[0]?.chat_auto_approve) {
+    const requestId = randomUUID()
+    await db`INSERT INTO sq_chat_requests (id, requester_id, kind, title, user_ids)
+      VALUES (${requestId}, ${user.id}, 'create', ${title}, ${JSON.stringify(ids)}::jsonb)`
+    await audit(user.id, 'conversation.requested', requestId)
+    await signal()
+    await pushChatRequest(user.name, `start a chat with ${ids.length - 1} ${ids.length === 2 ? 'person' : 'people'}`).catch(() => console.warn('Chat request push unavailable'))
+    return { pending: true, requestId }
   }
   const id = randomUUID()
   await db.transaction([

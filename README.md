@@ -1,6 +1,6 @@
 # SQ Chat
 
-Nuxt 4 chat with a shared room and private conversations for two or more people. Participants are added immediately, including when someone is added to an existing conversation. Newly added people can read its history. Andrew can read and moderate every conversation; this is disclosed in the interface. Private chats are access controlled, not end-to-end encrypted.
+Nuxt 4 chat with a shared room and private conversations for two or more people. Andrew approves new conversations and membership additions requested by other people. He can allow automatic approval for individual people. Newly added people can read a chat's history. Andrew can read and moderate every conversation; this is disclosed in the interface. Private chats are access controlled, not end-to-end encrypted.
 
 ## Accounts
 

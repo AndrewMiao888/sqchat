@@ -14,7 +14,7 @@ self.addEventListener('notificationclick', event => {
   event.notification.close()
   event.waitUntil((async () => {
     const target = new URL(event.notification.data?.url || '/', self.location.origin)
-    if (target.origin !== self.location.origin || target.pathname !== '/') return
+    if (target.origin !== self.location.origin || !['/', '/manage'].includes(target.pathname)) return
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const existing = windows.find(client => client.url === target.href) || windows.find(client => new URL(client.url).origin === target.origin) || windows[0]
     if (existing) {
