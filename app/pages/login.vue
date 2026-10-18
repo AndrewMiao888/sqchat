@@ -2,7 +2,8 @@
 import type { AuthState } from '#shared/types/auth'
 const { auth, api, load } = useAuth()
 const { autoEnable } = useDeviceNotifications()
-if (await load()) await navigateTo(auth.value.user?.homeConversation ? { path: '/', query: { chat: auth.value.user.homeConversation } } : '/')
+function returnChat() { const chat = auth.value.user?.homeConversation || (auth.value.user?.role === 'admin' ? auth.value.user.lastConversation : null); return chat ? { path: '/', query: { chat } } : '/' }
+if (await load()) await navigateTo(returnChat())
 const tab = ref<'login' | 'request' | 'setup'>('login')
 const name = ref('')
 const password = ref('')
@@ -21,7 +22,7 @@ async function submit() {
       password.value = ''
       clearNuxtData()
       await autoEnable()
-      await navigateTo(auth.value.user?.homeConversation ? { path: '/', query: { chat: auth.value.user.homeConversation } } : '/')
+      await navigateTo(returnChat())
     } else if (tab.value === 'request') {
       const result = await api('/api/auth/request', { method: 'POST', body: { name: name.value } })
       success.value = result.message

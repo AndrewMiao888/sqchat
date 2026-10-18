@@ -6,6 +6,7 @@ Nuxt 4 chat with a shared room and private conversations for two or more people.
 
 - Andrew is the only administrator and the only person with access to the CMS.
 - Andrew approves Darius, Harrison, and additional accounts, then privately shares a one-use setup code. New codes expire after 3 days. Andrew can reopen or delete them in the Code store until expiry. Owners choose their passwords; Andrew does not see them.
+- Andrew's last open chat is saved on the server and reopens when he returns. Selecting Everyone saves the shared room as his last chat.
 - Members need Andrew's one-use, 24-hour permission to change their password. A forgotten password can be reset by Andrew issuing a new setup code. Changes and resets revoke sessions immediately.
 - Andrew, Darius, Harrison, and Lucy cannot be deleted. Removing an additional account revokes access and preserves history. Reset names keeps these default accounts and preserves their credentials.
 - Password login only. Andrew's initial password is provisioned separately and is never included in source code, client assets, or logs. It is not forcibly changed.

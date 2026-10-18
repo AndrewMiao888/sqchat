@@ -165,9 +165,21 @@ function formatTime(date: string) {
   return new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit', timeZone: 'Australia/Adelaide' }).format(new Date(date))
 }
 function scrollToLatest() { nextTick(() => messageList.value?.scrollTo({ top: messageList.value.scrollHeight, behavior: 'smooth' })) }
-onMounted(scrollToLatest)
+let lastChatSave = Promise.resolve()
+function saveLastChat(chat: string) {
+  if (auth.value.user?.role !== 'admin') return
+  lastChatSave = lastChatSave.catch(() => {}).then(() => api('/api/account/last-chat', { method: 'PUT', body: { chat } }).then(() => {
+    if (auth.value.user?.role === 'admin') auth.value.user.lastConversation = chat
+  }))
+}
+onMounted(() => {
+  scrollToLatest()
+  if (auth.value.user?.role === 'admin' && !conversation.value && auth.value.user.lastConversation) {
+    void navigateTo({ path: '/', query: { chat: auth.value.user.lastConversation } })
+  } else saveLastChat(conversation.value)
+})
 watch(() => data.value.messages.at(-1)?.id, scrollToLatest)
-watch(conversation, () => { history.value = []; replyingTo.value = null; editingMessage.value = null; editingBody.value = ''; mobileConversations.value = false; sendError.value = ''; showMembers.value = false; showSharedMembers.value = false; additions.value = []; clearUnread() })
+watch(conversation, chat => { history.value = []; replyingTo.value = null; editingMessage.value = null; editingBody.value = ''; mobileConversations.value = false; sendError.value = ''; showMembers.value = false; showSharedMembers.value = false; additions.value = []; clearUnread(); saveLastChat(chat) })
 useHead(() => ({ title: `${data.value.settings.title || 'SQ Chat'} 璺?SQ Chat` }))
 </script>
 <template>

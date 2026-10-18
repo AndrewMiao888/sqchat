@@ -5,6 +5,7 @@ export interface Account {
   builtin: boolean
   privateOnly: boolean
   homeConversation: string | null
+  lastConversation: string | null
   status: 'pending' | 'approved' | 'active' | 'disabled'
   canChangePassword: boolean
 }

@@ -70,6 +70,7 @@ export async function store() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), decided_at TIMESTAMPTZ
     )`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_auto_approve BOOLEAN NOT NULL DEFAULT FALSE`
+    await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS last_chat TEXT`
     await Promise.all([
       db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0`,
       db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS private_only BOOLEAN NOT NULL DEFAULT FALSE`,

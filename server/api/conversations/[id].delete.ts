@@ -23,6 +23,7 @@ export default defineEventHandler(async event => {
       db`DELETE FROM sq_private_messages WHERE thread_id = ${id}`,
       db`DELETE FROM sq_thread_members WHERE thread_id = ${id}`,
       db`UPDATE sq_users SET home_thread = NULL WHERE home_thread = ${id}`,
+      db`UPDATE sq_users SET last_chat = '' WHERE last_chat = ${id}`,
       db`DELETE FROM sq_chat_requests WHERE thread_id = ${id}`,
       db`DELETE FROM sq_threads WHERE id = ${id}`,
       db`SELECT pg_notify('sqchat_changes', ${JSON.stringify({ users: thread.members.map(member => member.id) })})`
