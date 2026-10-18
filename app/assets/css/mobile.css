@@ -1,4 +1,11 @@
 /* Keep every route within the viewport while letting long names and message text wrap. */
+.shared-members-control { padding: 8px 16px; border-bottom: 1px solid #e8eae3; }
+.shared-members-control .members-toggle { display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+.shared-members-panel { display: grid; gap: 10px; max-height: 280px; overflow-y: auto; }
+.shared-member-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.shared-member-row > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; }
+.shared-member-row small { display: block; color: #777d70; font-size: 10px; font-weight: 400; }
+.shared-member-row button { flex: 0 0 auto; }
 html,
 body,
 #__nuxt {

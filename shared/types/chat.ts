@@ -37,7 +37,7 @@ export interface ChatState {
   messages: ChatMessage[]
   people: Person[]
   settings: ChatSettings
-  members: { id: string; name: string }[]
+  members: { id: string; name: string; sharedAllowed: boolean }[]
   conversations: Conversation[]
   conversation: string | null
   hasMore?: boolean

@@ -72,7 +72,7 @@ export async function getChatState(user: Account, conversation: string | null = 
       const ownsMessage = canOwnMessage(row, user, conversation)
       return { ...toMessage(row), canDelete: user.role === 'admin' || ownsMessage, canEdit: user.role === 'admin' || ownsMessage, ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
   }), settings: { ...DEFAULT_SETTINGS, ...(settings[0]?.data || {}) },
-    people: user.privateOnly ? [] : members.filter(row => !row.private_only).map(row => row.name), members: members.map(row => ({ id: row.id, name: row.name })),
+    people: user.privateOnly ? [] : members.filter(row => !row.private_only).map(row => row.name), members: members.map(row => ({ id: row.id, name: row.name, sharedAllowed: !row.private_only })),
     conversations: threads.map(toThread), conversation, hasMore: rows.length > 200, nextCursor, canSend: thread ? thread.canSend : !user.privateOnly }
 }
 export async function addMessage(user: Account, body: string, conversation: string | null, effects: MessageEffects = {}, attachments: string[] = [], replyTo: string | null = null) {
