@@ -109,15 +109,16 @@ export async function addMessage(user: Account, body: string, conversation: stri
   if (!rows.length) throw createError({ statusCode: 409, statusMessage: 'One of these files is not ready, belongs to another chat, or has already been sent.' })
   return { id }
 }
-export async function updateMessage(id: string, body: string, user: Account) {
+export async function updateMessage(id: string, body: string, user: Account, effects?: MessageEffects) {
   const db = await store()
+  const replacement = effects === undefined ? null : JSON.stringify(effects)
   const rows = await db`WITH changed AS (
-    UPDATE chat_messages SET body = ${body}, edited_at = NOW(), effects = effects - 'text' WHERE id = ${id}
+    UPDATE chat_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END WHERE id = ${id}
     AND (${user.role === 'admin'} OR (${!user.privateOnly} AND (sender_id = ${user.id} OR (sender_id IS NULL AND sender = ${user.name})))) RETURNING id
   ), signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
   if (rows.length) return { id }
   const privateRows = await db`WITH changed AS (
-    UPDATE sq_private_messages SET body = ${body}, edited_at = NOW(), effects = effects - 'text' WHERE id = ${id}
+    UPDATE sq_private_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END WHERE id = ${id}
     AND (${user.role === 'admin'} OR (sender_id = ${user.id} AND EXISTS (
       SELECT 1 FROM sq_thread_members m WHERE m.thread_id = sq_private_messages.thread_id AND m.user_id = ${user.id}
     ))) RETURNING id, thread_id

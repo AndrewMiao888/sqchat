@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { DEFAULT_SETTINGS, type ChatSettings, type ChatState } from '#shared/types/chat'
 import type { Conversation } from '#shared/types/auth'
+import type { ChatMessage } from '#shared/types/chat'
+import type { MessageEffects } from '#shared/types/media'
 definePageMeta({ middleware: 'admin' })
 const { api } = useAuth()
 const conversation = ref('')
@@ -19,6 +21,7 @@ const settingsFeedback = ref('')
 const settingsFailure = ref('')
 const editingId = ref<string | null>(null)
 const editingBody = ref('')
+const editingEffects = ref<MessageEffects>({})
 const previewKey = ref(0)
 watch(() => data.value.settings, (next, previous) => {
   if (JSON.stringify(form) === JSON.stringify(previous)) Object.assign(form, next)
@@ -38,12 +41,12 @@ async function saveSettings(defaults = false) {
   finally { saving.value = false; restoring.value = false }
 }
 const restoreDefaults = () => saveSettings(true)
-function startEditing(id: string, body: string) { editingId.value = id; editingBody.value = body; failure.value = '' }
+function startEditing(message: ChatMessage) { editingId.value = message.id; editingBody.value = message.body; editingEffects.value = structuredClone(message.effects || {}); failure.value = '' }
 async function saveMessage() {
   if (!editingId.value || !editingBody.value.trim()) return
   saving.value = true; failure.value = ''
   try {
-    await api('/api/messages/' + editingId.value, { method: 'PATCH', body: { body: editingBody.value } })
+    await api('/api/messages/' + editingId.value, { method: 'PATCH', body: { body: editingBody.value, effects: editingEffects.value } })
     editingId.value = null; status.value = 'Message updated.'; await refresh()
   } catch (error: any) { failure.value = error?.data?.statusMessage || 'Could not update the message.' }
   finally { saving.value = false }
@@ -120,8 +123,8 @@ useHead({ title: 'Manage chat / SQ Chat' })
           <div v-if="!data.messages.length" class="manage-empty">No messages yet. Go to the chat to start talking.</div>
           <div v-else class="manage-messages">
             <article v-for="message in [...data.messages].reverse()" :key="message.id" class="manage-message"><div class="manage-message-top"><strong>{{ message.sender }}</strong><time :datetime="message.createdAt">{{ formatDate(message.createdAt) }}</time></div>
-              <template v-if="editingId === message.id"><textarea v-model="editingBody" maxlength="1000" rows="3" aria-label="Edit message"></textarea><div class="message-actions"><button class="small-primary" type="button" :disabled="saving || !editingBody.trim()" @click="saveMessage">Save</button><button class="plain-button" type="button" @click="editingId = null">Cancel</button></div></template>
-              <template v-else><MessageContent :message="message" :animated="false" /><div class="message-actions"><button class="plain-button" type="button" @click="startEditing(message.id, message.body)">Edit</button><button class="plain-button danger-button" type="button" @click="removeMessage(message.id)">Delete</button></div></template>
+              <template v-if="editingId === message.id"><MessageEditFields v-model:body="editingBody" v-model:effects="editingEffects" :sender="message.sender" /><div class="message-actions"><button class="small-primary" type="button" :disabled="saving || !editingBody.trim()" @click="saveMessage">Save</button><button class="plain-button" type="button" @click="editingId = null">Cancel</button></div></template>
+              <template v-else><MessageContent :message="message" :animated="false" /><div class="message-actions"><button class="plain-button" type="button" @click="startEditing(message)">Edit</button><button class="plain-button danger-button" type="button" @click="removeMessage(message.id)">Delete</button></div></template>
             </article>
           </div>
         </section>
