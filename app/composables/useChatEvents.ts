@@ -1,4 +1,4 @@
-export function useChatEvents(onChange: (payload?: { conversation?: string | null }) => void) {
+export function useChatEvents(onChange: (payload?: { conversation?: string | null }) => void, onPresence?: (payload?: { conversation?: string | null; online?: boolean }) => void) {
   const { auth, load } = useAuth()
   const connection = ref<'connecting' | 'live' | 'reconnecting'>('connecting')
   let source: EventSource | undefined
@@ -8,18 +8,25 @@ export function useChatEvents(onChange: (payload?: { conversation?: string | nul
     let payload: { conversation?: string | null } | undefined
     try { payload = event?.data ? JSON.parse(event.data) : undefined } catch {}
     onChange(payload)
+    onPresence?.()
     // Account permissions can change while this tab remains open.
     void load().catch(() => {})
   }
 
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'visible') onChange()
+    if (document.visibilityState === 'visible') { onChange(); onPresence?.() }
   }
 
   onMounted(() => {
     source = new EventSource('/api/events')
     source.addEventListener('ready', update)
     source.addEventListener('change', update)
+    source.addEventListener('presence', event => {
+      let payload: { conversation?: string | null; online?: boolean } | undefined
+      try { payload = JSON.parse((event as MessageEvent).data) } catch {}
+      onPresence?.(payload)
+    })
+    source.addEventListener('heartbeat', () => onPresence?.())
     source.addEventListener('expired', () => {
       source?.close()
       auth.value = { user: null, csrf: '' }

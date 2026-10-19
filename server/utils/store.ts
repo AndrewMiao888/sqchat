@@ -70,6 +70,7 @@ export async function store() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), decided_at TIMESTAMPTZ
     )`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_auto_approve BOOLEAN NOT NULL DEFAULT FALSE`
+    await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS cms_editor BOOLEAN NOT NULL DEFAULT FALSE`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS last_chat TEXT`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_sort TEXT NOT NULL DEFAULT 'viewed' CHECK (chat_sort IN ('viewed','contributed'))`
     await db`CREATE TABLE IF NOT EXISTS sq_thread_views (user_id TEXT NOT NULL REFERENCES sq_users(id) ON DELETE CASCADE, thread_id TEXT NOT NULL REFERENCES sq_threads(id) ON DELETE CASCADE, last_viewed TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (user_id, thread_id))`
@@ -80,6 +81,11 @@ export async function store() {
       db`ALTER TABLE sq_sessions ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0`,
       db`CREATE TABLE IF NOT EXISTS sq_streams (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES sq_users(id), expires_at TIMESTAMPTZ NOT NULL
+      )`,
+      db`CREATE TABLE IF NOT EXISTS sq_typing (
+        user_id TEXT NOT NULL REFERENCES sq_users(id) ON DELETE CASCADE,
+        conversation TEXT NOT NULL, tab_id TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (user_id, conversation, tab_id)
       )`
     ])
     await db`CREATE TABLE IF NOT EXISTS sq_private_messages (

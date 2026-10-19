@@ -9,6 +9,7 @@ export interface Account {
   chatSort: 'viewed' | 'contributed'
   status: 'pending' | 'approved' | 'active' | 'disabled'
   canChangePassword: boolean
+  canEditCms: boolean
 }
 export interface AuthState { user: Account | null; csrf: string }
 export interface Conversation {

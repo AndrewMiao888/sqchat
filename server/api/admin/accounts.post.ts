@@ -16,6 +16,11 @@ export default defineEventHandler(async event => {
   let code: string | undefined
   let expiresAt: string | undefined
   switch (input.action) {
+    case 'allow-cms':
+    case 'block-cms':
+      if (target.status !== 'active') throw createError({ statusCode: 409, statusMessage: 'This account must finish setup first.' })
+      await db`UPDATE sq_users SET cms_editor = ${input.action === 'allow-cms'} WHERE id = ${target.id}`
+      break
     case 'allow-shared':
     case 'block-shared':
       await db`UPDATE sq_users SET private_only = ${input.action === 'block-shared'} WHERE id = ${target.id}`
@@ -59,7 +64,7 @@ export default defineEventHandler(async event => {
     case 'delete':
       if (target.builtin) throw createError({ statusCode: 403, statusMessage: 'Default accounts cannot be deleted.' })
       await db.transaction([
-        db`UPDATE sq_users SET status = 'disabled', password_hash = NULL, password_change_until = NULL, session_version = session_version + 1 WHERE id = ${target.id}`,
+        db`UPDATE sq_users SET status = 'disabled', cms_editor = FALSE, password_hash = NULL, password_change_until = NULL, session_version = session_version + 1 WHERE id = ${target.id}`,
         db`DELETE FROM sq_sessions WHERE user_id = ${target.id}`,
         db`UPDATE sq_invites SET revoked_at = NOW() WHERE user_id = ${target.id} AND used_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()`
       ])

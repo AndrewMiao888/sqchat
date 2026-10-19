@@ -3,7 +3,7 @@ export default defineNuxtConfig({
   routeRules: { '/sw.js': { headers: { 'Cache-Control': 'no-store, max-age=0', 'Service-Worker-Allowed': '/' } } },
   // Recover failed route downloads without Nuxt persisting auth/chat state in sessionStorage.
   experimental: { emitRouteChunkError: 'manual' },
-  css: ['~/assets/css/main.css', '~/assets/css/theme.css', '~/assets/css/auth.css', '~/assets/css/effects.css', '~/assets/css/mobile.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/theme.css', '~/assets/css/auth.css', '~/assets/css/effects.css', '~/assets/css/mobile.css', '~/assets/css/presence.css'],
   app: {
     head: {
       title: 'SQ Chat',

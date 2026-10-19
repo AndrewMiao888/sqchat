@@ -14,6 +14,32 @@ const previewKey = ref(0)
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const picker = ref<HTMLInputElement | null>(null)
 const selection = ref({ start: 0, end: 0 })
+let typingActive = false
+let typingId = ''
+let typingTimer: ReturnType<typeof setInterval> | undefined
+let typingQueue: Promise<unknown> = Promise.resolve()
+function reportTyping(typing: boolean) {
+  typingQueue = typingQueue.catch(() => {}).then(() => api('/api/presence/typing', { method: 'POST', body: { conversation: props.conversation || null, tabId: typingId, typing } })).catch(() => {})
+}
+function stopTyping() {
+  if (typingTimer) clearInterval(typingTimer)
+  typingTimer = undefined
+  if (typingActive) { typingActive = false; reportTyping(false) }
+}
+function startTyping() {
+  if (sending.value || !draft.value.trim() || document.visibilityState !== 'visible' || document.activeElement !== textarea.value) { stopTyping(); return }
+  if (typingActive) return
+  typingId ||= crypto.randomUUID()
+  typingActive = true
+  reportTyping(true)
+  typingTimer = setInterval(() => {
+    if (sending.value || !draft.value.trim() || document.visibilityState !== 'visible' || document.activeElement !== textarea.value) stopTyping()
+    else reportTyping(true)
+  }, 4000)
+}
+function typingVisibilityChanged() { if (document.visibilityState === 'visible') startTyping(); else stopTyping() }
+onMounted(() => document.addEventListener('visibilitychange', typingVisibilityChanged))
+onBeforeUnmount(() => { document.removeEventListener('visibilitychange', typingVisibilityChanged); stopTyping() })
 type Upload = { localId: string; id?: string; name: string; size: number; type: string; progress: number; status: 'uploading' | 'ready' | 'error'; error?: string; controller: AbortController }
 const uploads = ref<Upload[]>([])
 const { recovery, unsent } = useAppRecovery()
@@ -41,7 +67,7 @@ function startPress() { longPressed = false; pressTimer = setTimeout(() => { lon
 function endPress() { clearTimeout(pressTimer) }
 function sendClick() { endPress(); if (longPressed) { longPressed = false; return }; void send() }
 function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); void send() } }
-function textChanged() { effects.value.text = []; captureSelection() }
+function textChanged() { effects.value.text = []; captureSelection(); startTyping() }
 async function attach(files: FileList | File[] | null) {
   if (!files || sending.value || disposed) return
   failure.value = ''
@@ -73,12 +99,12 @@ async function removeUpload(file: Upload) {
 watch(() => props.replyTo?.id, () => { if (props.replyTo) nextTick(() => textarea.value?.focus()) })
 async function send() {
   if (!canSend.value) return
-  sending.value = true; failure.value = ''
+  sending.value = true; failure.value = ''; stopTyping()
   try {
     await api('/api/messages', { method: 'POST', body: { body: draft.value.trim(), conversation: props.conversation, attachments: ready.value.map(file => file.id), effects: effects.value, autoScreen: autoScreen.value, replyTo: props.replyTo?.id } })
     draft.value = ''; uploads.value = []; effects.value = {}; effectOpen.value = false; emit('sent'); textarea.value?.focus()
   } catch (error: any) { failure.value = error?.data?.statusMessage || 'Message could not be sent. Your draft is still here.' }
-  finally { sending.value = false }
+  finally { sending.value = false; startTyping() }
 }
 function allowLeave() { return !hasDraft.value || window.confirm('Discard this unsent message and its attachments?') }
 onBeforeRouteLeave(allowLeave)
@@ -90,7 +116,7 @@ onBeforeUnmount(() => { disposed = true; endPress(); for (const file of uploads.
     <div class="composer-identity"><span>Sending as <strong>{{ sender }}</strong></span><span class="composer-tip">Enter to send · Hold send for effects</span></div>
     <div v-if="replyTo" class="reply-draft"><UiIcon name="reply" /><div><strong>Replying to {{ replyTo.sender }}</strong><p>{{ replyTo.effects?.bubble === 'invisible' ? 'Invisible ink message' : replyTo.body.slice(0, 160) || 'Attachment' }}</p></div><button class="plain-button" type="button" aria-label="Cancel reply" @click="emit('cancelReply')"><UiIcon name="close" /></button></div>
     <div v-if="uploads.length" class="upload-tray"><div v-for="file in uploads" :key="file.localId" class="upload-item"><UiIcon :name="file.type.startsWith('image/') ? 'image' : 'file'" /><div><strong>{{ file.name }}</strong><small>{{ file.status === 'uploading' ? `Uploading ${file.progress}%` : file.status === 'error' ? file.error : fileSize(file.size) + ' / Ready' }}</small><progress v-if="file.status === 'uploading'" :value="file.progress" max="100"></progress></div><button type="button" :aria-label="`Remove ${file.name}`" @click="removeUpload(file)"><UiIcon name="close" /></button></div></div>
-    <div class="composer-box"><textarea ref="textarea" v-model="draft" aria-label="Your message" placeholder="Write a message or drop a file..." rows="2" maxlength="1000" :disabled="!interactive || sending" @keydown="keydown" @select="captureSelection" @keyup="captureSelection" @mouseup="captureSelection" @input="textChanged" @paste="event => { if (event.clipboardData?.files.length) { event.preventDefault(); attach(event.clipboardData.files) } }"></textarea><button class="send-button" type="button" :disabled="!canSend" :aria-label="sending ? 'Sending message' : 'Send message. Hold for effects.'" @click="sendClick" @pointerdown="startPress" @pointerup="endPress" @pointercancel="endPress" @pointerleave="endPress" @contextmenu.prevent="effectOpen = true; effectTab = 'bubble'"><UiIcon name="arrow-up" /></button></div>
+    <div class="composer-box"><textarea ref="textarea" v-model="draft" aria-label="Your message" placeholder="Write a message or drop a file..." rows="2" maxlength="1000" :disabled="!interactive || sending" @keydown="keydown" @select="captureSelection" @keyup="captureSelection" @mouseup="captureSelection" @input="textChanged" @focus="startTyping" @blur="stopTyping" @paste="event => { if (event.clipboardData?.files.length) { event.preventDefault(); attach(event.clipboardData.files) } }"></textarea><button class="send-button" type="button" :disabled="!canSend" :aria-label="sending ? 'Sending message' : 'Send message. Hold for effects.'" @click="sendClick" @pointerdown="startPress" @pointerup="endPress" @pointercancel="endPress" @pointerleave="endPress" @contextmenu.prevent="effectOpen = true; effectTab = 'bubble'"><UiIcon name="arrow-up" /></button></div>
     <div class="composer-tools"><input ref="picker" type="file" multiple :accept="FILE_ACCEPT" hidden @change="attach(($event.target as HTMLInputElement).files)"><button class="plain-button" type="button" :disabled="!interactive || sending || uploads.length >= MAX_ATTACHMENTS" @click="picker?.click()"><UiIcon name="paperclip" /> Attach</button><button class="plain-button" type="button" :disabled="!interactive" :aria-expanded="effectOpen" @click="effectOpen = !effectOpen"><SparkIcon /> Effects<span v-if="effects.text?.length || effects.bubble || effects.screen" class="effect-active-dot"></span></button><span class="composer-limit">{{ draft.length }}/1000 · 20 MB per file</span></div>
     <div v-if="effectOpen" class="effects-panel"><div class="effects-panel-heading"><strong>Send with a little more expression</strong><button class="plain-button" type="button" aria-label="Close effects" @click="effectOpen = false"><UiIcon name="close" /></button></div><div class="effect-tabs" role="group" aria-label="Effect category"><button v-for="tab in (['text','bubble','screen'] as const)" :key="tab" type="button" :class="{ active: effectTab === tab }" :aria-pressed="effectTab === tab" @click="effectTab = tab">{{ tab }}</button></div>
       <template v-if="effectTab === 'text'"><p class="field-help">Select words in your message first, or apply an effect to all text. Editing your message clears its word effects.</p><div class="effect-options"><button v-for="effect in TEXT_EFFECTS" :key="effect" type="button" :disabled="!draft.trim()" @click="addTextEffect(effect)">{{ effect }}</button></div></template>

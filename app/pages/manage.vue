@@ -4,14 +4,16 @@ import type { Conversation } from '#shared/types/auth'
 import type { ChatMessage } from '#shared/types/chat'
 import type { MessageEffects } from '#shared/types/media'
 definePageMeta({ middleware: 'admin' })
-const { api } = useAuth()
+const { auth, api } = useAuth()
+const isAdmin = computed(() => auth.value.user?.role === 'admin')
+watch(() => auth.value.user?.canEditCms, allowed => { if (!allowed) void navigateTo('/') })
 const conversation = ref('')
 const { data, refresh, error } = await useAsyncData('manage-state', () => api<ChatState>('/api/state', { query: { conversation: conversation.value } }), { default: emptyChatState, watch: [conversation] })
-const { data: auditLog, refresh: refreshAudit } = await useAsyncData('audit', () => api<any[]>('/api/admin/audit'), { default: () => [] })
+const { data: auditLog, refresh: refreshAudit } = await useAsyncData('audit', () => isAdmin.value ? api<any[]>('/api/admin/audit') : Promise.resolve([]), { default: () => [] })
 const form = reactive<ChatSettings>({ ...data.value.settings })
 useHead(() => ({ link: [{ rel: 'icon', type: 'image/svg+xml', key: 'favicon', href: '/favicon.svg?accent=' + encodeURIComponent(form.accentColor) }] }))
 const themeStyle = computed(() => chatThemeStyle(form))
-const { connection } = useChatEvents(() => { void refresh(); void refreshAudit() })
+const { connection } = useChatEvents(() => { void refresh(); if (isAdmin.value) void refreshAudit() })
 const saving = ref(false)
 const restoring = ref(false)
 const confirmRestore = ref(false)
@@ -75,12 +77,12 @@ useHead({ title: 'Manage chat / SQ Chat' })
   <div class="site-shell manage-shell" :class="`bubble-${form.bubbleStyle}`" :style="themeStyle">
     <header class="topbar"><BrandLogo /><span class="topbar-caption">Room editor</span><NuxtLink to="/" class="topbar-link"><UiIcon name="arrow-left" /> Back to chat</NuxtLink></header>
     <main class="manage-main">
-      <div class="manage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> ANDREW'S SETTINGS</div><h1>Make this space yours.</h1><p>Edit what appears in the room and manage the conversation.</p></div><div class="manage-pills"><span class="live-badge" :class="{ reconnecting: connection !== 'live' }"><span class="live-dot"></span>{{ connection === 'live' ? 'Live sync' : 'Connecting…' }}</span><span class="public-pill">Administrator only</span></div></div>
-      <p class="public-explainer">Only you can change settings, approve accounts, authorise password changes, and moderate messages. Everyone sees saved changes live.</p>
+      <div class="manage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> ROOM SETTINGS</div><h1>Make this space yours.</h1><p>Edit what appears in the room{{ isAdmin ? ' and manage the conversation' : '' }}.</p></div><div class="manage-pills"><span class="live-badge" :class="{ reconnecting: connection !== 'live' }"><span class="live-dot"></span>{{ connection === 'live' ? 'Live sync' : 'Connecting…' }}</span><span class="public-pill">{{ isAdmin ? 'Administrator' : 'Room editor' }}</span></div></div>
+      <p class="public-explainer">{{ isAdmin ? 'You can approve accounts, grant room editing access, and moderate messages. Everyone sees saved room changes live.' : 'Andrew gave you access to edit room content and appearance. Everyone sees saved changes live.' }}</p>
       <div v-if="error" class="alert error-alert">Could not load room content. <button class="text-button" type="button" @click="refresh()">Try again</button></div>
       <div v-if="status" class="alert success-alert" role="status">{{ status }}</div>
       <div v-if="failure" class="alert error-alert" role="alert">{{ failure }}</div>
-      <div class="manage-grid">
+      <div class="manage-grid" :class="{ 'cms-only': !isAdmin }">
         <section class="manage-card"><div class="card-title"><span class="card-icon"><SparkIcon /></span><div><h2>Room content</h2><p>The words everyone sees in the chat.</p></div></div>
           <form class="settings-form" @submit.prevent="saveSettings()">
             <label>Room title <input v-model="form.title" maxlength="70" required placeholder="The group chat"></label>
@@ -115,7 +117,7 @@ useHead({ title: 'Manage chat / SQ Chat' })
             </div>
           </form>
         </section>
-        <div class="manage-side-column">
+        <div v-if="isAdmin" class="manage-side-column">
         <ChatRequests />
         <AccountManager />
         <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon"><MessageIcon /></span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>

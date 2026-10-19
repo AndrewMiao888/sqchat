@@ -12,7 +12,8 @@ const SESSION_COOKIE_SECONDS = SESSION_IDLE_DAYS * 24 * 60 * 60
 export function publicAccount(row: any): Account {
   return { id: row.id, name: row.name, role: row.role, builtin: row.builtin, status: row.status,
     privateOnly: !!row.private_only, homeConversation: row.home_thread || null, lastConversation: row.last_chat ?? null, chatSort: row.chat_sort === 'contributed' ? 'contributed' : 'viewed',
-    canChangePassword: row.role === 'admin' || !!(row.password_change_until && new Date(row.password_change_until).getTime() > Date.now()) }
+    canChangePassword: row.role === 'admin' || !!(row.password_change_until && new Date(row.password_change_until).getTime() > Date.now()),
+    canEditCms: row.role === 'admin' || !!row.cms_editor }
 }
 
 export async function sessionForHash(hash: string, touch = false): Promise<AuthSession | null> {
@@ -45,6 +46,12 @@ export async function requireAuth(event: H3Event) {
 export async function requireAdmin(event: H3Event) {
   const auth = await requireAuth(event)
   if (auth.user.role !== 'admin') throw createError({ statusCode: 403, statusMessage: 'Only Andrew can do that.' })
+  return auth
+}
+
+export async function requireCmsEditor(event: H3Event) {
+  const auth = await requireAuth(event)
+  if (!auth.user.canEditCms) throw createError({ statusCode: 403, statusMessage: 'Andrew has not given you room editing access.' })
   return auth
 }
 

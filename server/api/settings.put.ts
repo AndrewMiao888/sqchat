@@ -1,6 +1,6 @@
 import { cleanText, updateSettings } from '../utils/chat'
 import { DEFAULT_SETTINGS, type ChatSettings } from '#shared/types/chat'
-import { requireAdmin } from '../utils/auth'
+import { requireCmsEditor } from '../utils/auth'
 import { audit, store } from '../utils/store'
 import { settingsNotification } from '../utils/notificationText'
 import { pushSettings } from '../utils/push'
@@ -9,7 +9,7 @@ const hexColor = (value: unknown): value is string => typeof value === 'string' 
 const choice = <T extends string>(value: unknown, options: readonly T[]): value is T => options.includes(value as T)
 
 export default defineEventHandler(async (event) => {
-  const { user } = await requireAdmin(event)
+  const { user } = await requireCmsEditor(event)
   const input = await readBody(event)
   const title = cleanText(input?.title, 70)
   const subtitle = cleanText(input?.subtitle, 160)
