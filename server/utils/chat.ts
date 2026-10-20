@@ -71,7 +71,7 @@ export async function getChatState(user: Account, conversation: string | null = 
     WHERE message_id = ANY(${messages.map(row => row.id)}::text[]) AND status = 'attached' ORDER BY created_at, id` : []
   const reads = messages.length ? await db`SELECT message_id, user_id, read_at FROM sq_message_reads
     WHERE message_id = ANY(${messages.map(row => row.id)}::text[])` : []
-  const reminders = messages.length ? await db`SELECT message_id, user_id, reminded_at FROM sq_message_reminders
+  const reminders = user.role === 'admin' && messages.length ? await db`SELECT message_id, user_id, reminded_at FROM sq_message_reminders
     WHERE message_id = ANY(${messages.map(row => row.id)}::text[])` : []
   const eligibleReaders = thread
     ? thread.members.filter(member => member.active).map(member => ({ id: member.id, name: member.name }))

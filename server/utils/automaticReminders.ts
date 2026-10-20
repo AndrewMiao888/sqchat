@@ -1,4 +1,4 @@
-import { store, audit, signal } from './store'
+import { store, audit } from './store'
 import { getStoredReminderSettings } from './reminderSettings'
 import { pushUnreadReminder } from './push'
 
@@ -58,6 +58,6 @@ export async function dispatchDueReminders() {
       await audit(null, 'message.reminder.auto', `${row.message_id}:${row.user_id}`)
     }
   }))
-  if (sent) await signal()
+  if (sent) await db`SELECT pg_notify('sqchat_changes', ${JSON.stringify({ receipt: true, privateEvent: true })})`
   return sent
 }

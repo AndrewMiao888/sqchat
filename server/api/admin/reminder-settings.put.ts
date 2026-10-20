@@ -7,6 +7,7 @@ export default defineEventHandler(async event => {
   const { user } = await requireAdmin(event)
   const input = await readBody(event)
   if (typeof input?.manualEnabled !== 'boolean'
+    || (input.manualEnabled && input.automaticAfterMinutes !== null)
     || (input.automaticAfterMinutes !== null && (!Number.isInteger(input.automaticAfterMinutes)
       || input.automaticAfterMinutes < 60 || input.automaticAfterMinutes > 10080
       || input.automaticAfterMinutes % 60 !== 0))) {

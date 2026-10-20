@@ -38,6 +38,6 @@ export default defineEventHandler(async event => {
   }
   if (!sent) throw createError({ statusCode: 409, statusMessage: 'No active notification device could receive the reminder.' })
   await audit(user.id, 'message.reminder', `${input.messageId}:${input.userId}`)
-  await db`SELECT pg_notify('sqchat_changes', ${JSON.stringify({ conversation, receipt: true, ...(conversation ? { users: [user.id] } : {}) })})`
+  await db`SELECT pg_notify('sqchat_changes', ${JSON.stringify({ conversation, receipt: true, privateEvent: true })})`
   return { sent: true }
 })

@@ -11,10 +11,11 @@ export async function getStoredReminderSettings(): Promise<StoredReminderSetting
   if (!rows.length) return { ...DEFAULT_REMINDER_SETTINGS, automaticSince: null }
   try {
     const parsed = JSON.parse(rows[0]!.value)
+    const automaticAfterMinutes = Number.isInteger(parsed.automaticAfterMinutes) && parsed.automaticAfterMinutes >= 60 && parsed.automaticAfterMinutes <= 10080
+      ? parsed.automaticAfterMinutes : null
     return {
-      manualEnabled: parsed.manualEnabled === true,
-      automaticAfterMinutes: Number.isInteger(parsed.automaticAfterMinutes) && parsed.automaticAfterMinutes >= 60 && parsed.automaticAfterMinutes <= 10080
-        ? parsed.automaticAfterMinutes : null,
+      manualEnabled: automaticAfterMinutes === null && parsed.manualEnabled === true,
+      automaticAfterMinutes,
       automaticSince: typeof parsed.automaticSince === 'string' && !Number.isNaN(Date.parse(parsed.automaticSince))
         ? parsed.automaticSince : null
     }

@@ -50,8 +50,10 @@ export default defineEventHandler(async event => {
     if (!allowed) {
       try {
         const payload = JSON.parse(notification.payload || '{}')
-        allowed = auth.user.role === 'admin' || (payload.conversation === null && !auth.user.privateOnly)
-          || (Array.isArray(payload.users) && payload.users.includes(auth.user.id))
+        allowed = payload.privateEvent === true
+          ? auth.user.role === 'admin'
+          : auth.user.role === 'admin' || (payload.conversation === null && !auth.user.privateOnly)
+            || (Array.isArray(payload.users) && payload.users.includes(auth.user.id))
       } catch { return }
     }
     if (allowed) void check('change', notification.payload || '{}')
