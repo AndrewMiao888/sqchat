@@ -14,7 +14,7 @@ export async function getStoredReminderSettings(): Promise<StoredReminderSetting
     const automaticAfterMinutes = Number.isInteger(parsed.automaticAfterMinutes) && parsed.automaticAfterMinutes >= 60 && parsed.automaticAfterMinutes <= 10080
       ? parsed.automaticAfterMinutes : null
     return {
-      manualEnabled: automaticAfterMinutes === null && parsed.manualEnabled === true,
+      manualEnabled: parsed.manualEnabled === true,
       automaticAfterMinutes,
       automaticSince: typeof parsed.automaticSince === 'string' && !Number.isNaN(Date.parse(parsed.automaticSince))
         ? parsed.automaticSince : null
