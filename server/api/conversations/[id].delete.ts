@@ -13,6 +13,7 @@ export default defineEventHandler(async event => {
       db`UPDATE sq_attachments SET status = 'deleted' WHERE thread_id IS NULL AND message_id IN (SELECT id FROM chat_messages) RETURNING blob_path`,
       db`DELETE FROM sq_message_reads WHERE message_id IN (SELECT id FROM chat_messages)`,
       db`DELETE FROM sq_message_reminders WHERE message_id IN (SELECT id FROM chat_messages)`,
+      db`DELETE FROM sq_message_reactions WHERE message_id IN (SELECT id FROM chat_messages)`,
       db`DELETE FROM chat_messages`,
       db`SELECT pg_notify('sqchat_changes', 'change')`
     ])
@@ -24,6 +25,8 @@ export default defineEventHandler(async event => {
       db`UPDATE sq_attachments SET status = 'deleted', thread_id = NULL WHERE thread_id = ${id} RETURNING blob_path`,
       db`DELETE FROM sq_message_reads WHERE message_id IN (SELECT id FROM sq_private_messages WHERE thread_id = ${id})`,
       db`DELETE FROM sq_message_reminders WHERE message_id IN (SELECT id FROM sq_private_messages WHERE thread_id = ${id})`,
+      db`DELETE FROM sq_message_reactions WHERE message_id IN (SELECT id FROM sq_private_messages WHERE thread_id = ${id})`,
+      db`DELETE FROM sq_conversation_themes WHERE conversation_key = ${id}`,
       db`DELETE FROM sq_private_messages WHERE thread_id = ${id}`,
       db`DELETE FROM sq_thread_members WHERE thread_id = ${id}`,
       db`UPDATE sq_users SET home_thread = NULL WHERE home_thread = ${id}`,

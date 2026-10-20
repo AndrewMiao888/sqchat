@@ -1,4 +1,6 @@
-export function useChatEvents(onChange: (payload?: { conversation?: string | null; receipt?: boolean }) => void, onPresence?: (payload?: { conversation?: string | null; online?: boolean }) => void) {
+type ChatChange = { conversation?: string | null; receipt?: boolean; reaction?: boolean; appearance?: boolean }
+
+export function useChatEvents(onChange: (payload?: ChatChange) => void, onPresence?: (payload?: { conversation?: string | null; online?: boolean }) => void) {
   const { auth, api, load } = useAuth()
   const connection = ref<'connecting' | 'live' | 'reconnecting'>('connecting')
   let source: EventSource | undefined
@@ -7,7 +9,7 @@ export function useChatEvents(onChange: (payload?: { conversation?: string | nul
 
   const update = (event?: MessageEvent) => {
     connection.value = 'live'
-    let payload: { conversation?: string | null; receipt?: boolean } | undefined
+    let payload: ChatChange | undefined
     try { payload = event?.data ? JSON.parse(event.data) : undefined } catch {}
     onChange(payload)
     if (!payload?.receipt) onPresence?.()

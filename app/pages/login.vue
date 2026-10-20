@@ -12,6 +12,8 @@ const code = ref('')
 const busy = ref(false)
 const failure = ref('')
 const success = ref('')
+const welcomeVisible = ref(false)
+const welcomeName = ref('')
 watch(tab, () => { failure.value = ''; success.value = ''; password.value = ''; confirmation.value = ''; code.value = '' })
 async function submit() {
   if (busy.value) return
@@ -21,7 +23,11 @@ async function submit() {
       auth.value = await api<AuthState>('/api/auth/login', { method: 'POST', body: { name: name.value, password: password.value } })
       password.value = ''
       clearNuxtData()
-      await autoEnable()
+      welcomeName.value = auth.value.user?.name || 'friend'
+      welcomeVisible.value = true
+      void autoEnable().catch(() => {})
+      await nextTick()
+      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 250 : 1900))
       await navigateTo(returnChat())
     } else if (tab.value === 'request') {
       const result = await api('/api/auth/request', { method: 'POST', body: { name: name.value } })
@@ -62,5 +68,11 @@ useHead({ title: 'Sign in · SQ Chat' })
       </section>
     </main>
     <p class="privacy-note"><UiIcon name="lock" /> Private chats are visible to their participants and Andrew, the room administrator.</p>
+    <Transition name="sq-welcome">
+      <div v-if="welcomeVisible" class="sq-welcome-overlay" role="status" aria-live="polite" aria-label="Welcome to SQ Chat">
+        <div class="welcome-glow welcome-glow-one"></div><div class="welcome-glow welcome-glow-two"></div>
+        <div class="welcome-content"><div class="welcome-orbit"><span class="welcome-mark">SQ</span><span class="welcome-check"><UiIcon name="check" /></span></div><p class="welcome-kicker">YOUR SPACE IS READY</p><h1>Welcome, <span>{{ welcomeName }}</span>.</h1><p class="welcome-subtitle">Your people are just a message away.</p><div class="welcome-progress"><span></span></div></div>
+      </div>
+    </Transition>
   </div>
 </template>

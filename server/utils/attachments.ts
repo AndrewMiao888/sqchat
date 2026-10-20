@@ -52,7 +52,7 @@ export async function verifyUpload(file: any) {
 export async function removeAttachment(file: any) {
   const db = await store()
   const changed = await db`UPDATE sq_attachments SET status = 'deleted'
-    WHERE id = ${file.id} AND status IN ('pending','ready','deleted') RETURNING id, created_at`
+    WHERE id = ${file.id} AND status IN ('pending','ready','theme','deleted') RETURNING id, created_at`
   if (!changed.length) throw createError({ statusCode: 409, statusMessage: 'This file was already sent or removed.' })
   await del(file.blob_path)
   await db`UPDATE sq_attachments SET status = 'purged' WHERE id = ${file.id} AND status = 'deleted' AND created_at < NOW() - INTERVAL '20 minutes'`
@@ -61,6 +61,9 @@ export async function removeAttachment(file: any) {
 export async function cleanAbandonedUploads() {
   const db = await store()
   const rows = await db`SELECT id, blob_path FROM sq_attachments WHERE (status IN ('pending','ready') AND created_at < NOW() - INTERVAL '24 hours')
+    OR (status = 'theme' AND created_at < NOW() - INTERVAL '24 hours' AND NOT EXISTS (
+      SELECT 1 FROM sq_conversation_themes t WHERE t.data->>'backgroundImageId' = sq_attachments.id
+    ))
     OR (status = 'deleted' AND created_at < NOW() - INTERVAL '20 minutes') LIMIT 12`
   for (const row of rows) await removeAttachment(row).catch(() => {})
 }

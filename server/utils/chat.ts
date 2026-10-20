@@ -3,7 +3,7 @@ import { del } from '@vercel/blob'
 import type { MessageEffects } from '#shared/types/media'
 import { store, signal } from './store'
 import type { Account, Conversation } from '#shared/types/auth'
-import { DEFAULT_SETTINGS, type ChatMessage, type ChatSettings, type ChatState } from '#shared/types/chat'
+import { DEFAULT_CONVERSATION_THEME, DEFAULT_SETTINGS, type ChatMessage, type ChatSettings, type ChatState } from '#shared/types/chat'
 import { getReminderSettings } from './reminderSettings'
 
 export function normalizePersonName(value: unknown): string | null {
@@ -17,7 +17,7 @@ export function cleanText(value: unknown, max: number): string | null {
   return text && text.length <= max ? text : null
 }
 function toMessage(row: any): ChatMessage {
-  return { id: row.id, sender: row.sender, body: row.body, effects: row.effects || {}, createdAt: new Date(row.created_at).toISOString(),
+  return { id: row.id, sender: row.sender, ...(row.sender_id ? { senderId: row.sender_id } : {}), body: row.body, effects: row.effects || {}, createdAt: new Date(row.created_at).toISOString(),
     ...(row.edited_at ? { editedAt: new Date(row.edited_at).toISOString() } : {}) }
 }
 function toThread(row: any): Conversation {
@@ -48,7 +48,7 @@ export async function getChatState(user: Account, conversation: string | null = 
   const db = await store()
   const thread = conversation ? await findThread(user, conversation) : null
   if (thread) await db`INSERT INTO sq_thread_views (user_id, thread_id, last_viewed) VALUES (${user.id}, ${conversation}, NOW()) ON CONFLICT (user_id, thread_id) DO UPDATE SET last_viewed = NOW()`
-  const [rows, settings, members, threads, reminderSettings] = await Promise.all([
+  const [rows, settings, members, threads, reminderSettings, themeRows] = await Promise.all([
     thread ? db`SELECT m.*, m.created_at::text AS cursor_at, u.name AS sender FROM (
       SELECT * FROM sq_private_messages WHERE thread_id = ${thread.id} AND (${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''})) ORDER BY created_at DESC, id DESC LIMIT 201
     ) m JOIN sq_users u ON u.id = m.sender_id ORDER BY m.created_at, m.id`
@@ -64,6 +64,7 @@ export async function getChatState(user: Account, conversation: string | null = 
       WHERE ${user.role === 'admin'} OR EXISTS (SELECT 1 FROM sq_thread_members own WHERE own.thread_id = t.id AND own.user_id = ${user.id})
       ORDER BY CASE WHEN ${user.chatSort} = 'contributed' THEN COALESCE((SELECT MAX(pm2.created_at) FROM sq_private_messages pm2 WHERE pm2.thread_id = t.id), t.created_at) ELSE COALESCE((SELECT MAX(tv2.last_viewed) FROM sq_thread_views tv2 WHERE tv2.thread_id = t.id AND tv2.user_id = ${user.id}), to_timestamp(0)) END DESC, t.created_at DESC`,
     user.role === 'admin' ? getReminderSettings() : Promise.resolve(undefined)
+    , user.privateOnly && !conversation ? Promise.resolve([]) : db`SELECT data FROM sq_conversation_themes WHERE conversation_key = ${conversation || 'shared'}`
   ])
   const messages = rows.slice(-200)
   const nextCursor = messages[0] ? Buffer.from(JSON.stringify({ at: messages[0].cursor_at, id: messages[0].id })).toString('base64url') : null
@@ -73,11 +74,21 @@ export async function getChatState(user: Account, conversation: string | null = 
     WHERE message_id = ANY(${messages.map(row => row.id)}::text[])` : []
   const reminders = user.role === 'admin' && messages.length ? await db`SELECT message_id, user_id, reminded_at FROM sq_message_reminders
     WHERE message_id = ANY(${messages.map(row => row.id)}::text[])` : []
+  const reactionRows = messages.length ? await db`SELECT r.message_id, r.emoji, r.user_id, u.name
+    FROM sq_message_reactions r JOIN sq_users u ON u.id = r.user_id
+    WHERE r.message_id = ANY(${messages.map(row => row.id)}::text[]) ORDER BY r.created_at, u.name` : []
   const eligibleReaders = thread
     ? thread.members.filter(member => member.active).map(member => ({ id: member.id, name: member.name }))
     : members.filter(row => !row.private_only).map(row => ({ id: row.id, name: row.name }))
   const readTimes = new Map<string, Map<string, string>>()
   const reminderTimes = new Map<string, Map<string, string>>()
+  const reactionsByMessage = new Map<string, Map<string, { users: { id: string; name: string }[] }>>()
+  for (const reaction of reactionRows) {
+    if (!reactionsByMessage.has(reaction.message_id)) reactionsByMessage.set(reaction.message_id, new Map())
+    const byEmoji = reactionsByMessage.get(reaction.message_id)!
+    if (!byEmoji.has(reaction.emoji)) byEmoji.set(reaction.emoji, { users: [] })
+    byEmoji.get(reaction.emoji)!.users.push({ id: reaction.user_id, name: reaction.name })
+  }
   for (const read of reads) {
     if (!readTimes.has(read.message_id)) readTimes.set(read.message_id, new Map())
     readTimes.get(read.message_id)!.set(read.user_id, new Date(read.read_at).toISOString())
@@ -97,11 +108,16 @@ export async function getChatState(user: Account, conversation: string | null = 
       const ownsMessage = canOwnMessage(row, user, conversation)
       const recipients = eligibleReaders.filter(member => row.sender_id ? member.id !== row.sender_id : member.name !== row.sender)
       const seen = readTimes.get(row.id)
+      const byEmoji = reactionsByMessage.get(row.id)
+      const reactions = byEmoji ? [...byEmoji.entries()].map(([emoji, reaction]) => ({
+        emoji, count: reaction.users.length, users: reaction.users, reactedByMe: reaction.users.some(person => person.id === user.id)
+      })) : []
       return { ...toMessage(row), canDelete: canModerateHere || ownsMessage, canEdit: canModerateHere || ownsMessage,
         readBy: recipients.filter(member => seen?.has(member.id)).map(member => ({ ...member, at: seen!.get(member.id)! })),
         unreadBy: recipients.filter(member => !seen?.has(member.id)).map(member => ({ ...member, remindedAt: reminderTimes.get(row.id)?.get(member.id) })),
-        ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
+        ...(replyTo ? { replyTo } : {}), reactions, attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
   }), settings: { ...DEFAULT_SETTINGS, ...(settings[0]?.data || {}) },
+    theme: { ...DEFAULT_CONVERSATION_THEME, ...(themeRows[0]?.data || {}) },
     people: user.privateOnly ? [] : members.filter(row => !row.private_only).map(row => row.name), members: members.map(row => ({ id: row.id, name: row.name, sharedAllowed: !row.private_only })),
     conversations: threads.map(toThread), conversation, hasMore: rows.length > 200, nextCursor, canSend: thread ? thread.canSend : !user.privateOnly,
     ...(reminderSettings ? { reminderSettings } : {}) }
@@ -119,7 +135,7 @@ export async function addMessage(user: Account, body: string, conversation: stri
   if (conversation) {
     rows = await db`WITH valid AS (
       SELECT id FROM sq_attachments WHERE id = ANY(${attachments}::text[]) AND owner_id = ${user.id}
-        AND thread_id = ${conversation} AND status = 'ready' AND message_id IS NULL FOR UPDATE
+        AND thread_id = ${conversation} AND status = 'ready' AND purpose = 'message' AND message_id IS NULL FOR UPDATE
     ), changed AS (
       INSERT INTO sq_private_messages (id, thread_id, sender_id, body, effects, reply_to)
       SELECT ${id}, ${conversation}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo} WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id, thread_id
@@ -130,7 +146,7 @@ export async function addMessage(user: Account, body: string, conversation: stri
   } else {
     rows = await db`WITH valid AS (
       SELECT id FROM sq_attachments WHERE id = ANY(${attachments}::text[]) AND owner_id = ${user.id}
-        AND thread_id IS NULL AND status = 'ready' AND message_id IS NULL FOR UPDATE
+        AND thread_id IS NULL AND status = 'ready' AND purpose = 'message' AND message_id IS NULL FOR UPDATE
     ), changed AS (
       INSERT INTO chat_messages (id, sender, sender_id, body, effects, reply_to) SELECT ${id}, ${user.name}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo}
       WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id
@@ -179,6 +195,7 @@ async function deleteMessageFiles(id: string) {
   const db = await store()
   await db`DELETE FROM sq_message_reads WHERE message_id = ${id}`
   await db`DELETE FROM sq_message_reminders WHERE message_id = ${id}`
+  await db`DELETE FROM sq_message_reactions WHERE message_id = ${id}`
   const files = await db`UPDATE sq_attachments SET status = 'deleted' WHERE message_id = ${id} RETURNING blob_path`
   await Promise.allSettled(files.map(file => del(file.blob_path)))
 }

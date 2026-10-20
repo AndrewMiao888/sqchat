@@ -115,6 +115,17 @@ export async function store() {
         blob_path TEXT UNIQUE NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`
     ])
+    await db`ALTER TABLE sq_attachments ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'message'`
+    await Promise.all([
+      db`CREATE TABLE IF NOT EXISTS sq_conversation_themes (
+        conversation_key TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+      db`CREATE TABLE IF NOT EXISTS sq_message_reactions (
+        message_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES sq_users(id) ON DELETE CASCADE,
+        emoji TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (message_id, user_id, emoji)
+      )`
+    ])
+    await db`CREATE INDEX IF NOT EXISTS sq_message_reactions_message ON sq_message_reactions(message_id)`
     await db`CREATE INDEX IF NOT EXISTS sq_attachments_message ON sq_attachments(message_id)`
     await Promise.all([
       db`CREATE INDEX IF NOT EXISTS sq_private_timeline ON sq_private_messages(thread_id, created_at DESC, id DESC)`,

@@ -44,6 +44,7 @@ watch(() => data.value.settings, (next, previous) => {
   if (JSON.stringify(form) === JSON.stringify(previous)) Object.assign(form, next)
 })
 watch(conversation, () => { editingId.value = null; failure.value = ''; status.value = '' })
+const appearanceMembers = computed(() => data.value.members)
 async function saveSettings(defaults = false) {
   if (saving.value) return
   saving.value = true; restoring.value = defaults
@@ -132,6 +133,7 @@ useHead({ title: 'Manage chat / SQ Chat' })
             </div>
           </form>
         </section>
+        <ConversationAppearance v-if="canEditRoom" v-model:conversation="conversation" :conversations="data.conversations" :shared-allowed="!auth.user?.privateOnly" :members="appearanceMembers" @saved="refresh" />
         <div v-if="canModerate" class="manage-side-column">
         <ReminderControls v-if="isAdmin" :settings="data.reminderSettings" />
         <ChatRequests v-if="isAdmin" />

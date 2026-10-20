@@ -2,11 +2,19 @@
 import type { ChatMessage } from '#shared/types/chat'
 import type { TextEffect } from '#shared/types/media'
 defineEmits<{ jump: [id: string] }>()
-const props = withDefaults(defineProps<{ message: ChatMessage; animated?: boolean; play?: number }>(), { animated: true, play: 0 })
+const props = withDefaults(defineProps<{ message: ChatMessage; animated?: boolean; play?: number; bubbleColor?: string }>(), { animated: true, play: 0 })
 const revealed = ref(false)
 const revealAt = ref<{ x: number; y: number } | null>(null)
 let hideTimer: ReturnType<typeof setTimeout> | undefined
 const invisible = computed(() => props.message.effects?.bubble === 'invisible')
+const bubbleStyle = computed(() => {
+  if (!props.bubbleColor || !/^#[0-9a-f]{6}$/i.test(props.bubbleColor)) return undefined
+  const red = parseInt(props.bubbleColor.slice(1, 3), 16)
+  const green = parseInt(props.bubbleColor.slice(3, 5), 16)
+  const blue = parseInt(props.bubbleColor.slice(5, 7), 16)
+  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255
+  return { '--message-bubble-color': props.bubbleColor, '--message-bubble-ink': luminance > .6 ? '#1c241c' : '#ffffff' }
+})
 const characters = computed(() => {
   const segments = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(props.message.body)]
   return segments.map((segment, index) => ({ text: segment.segment, index, effect: [...(props.message.effects?.text || [])].reverse().find(span => segment.index >= span.start && segment.index < span.end)?.effect as TextEffect | undefined }))
@@ -25,7 +33,7 @@ function scratch(event: PointerEvent) {
 onBeforeUnmount(() => clearTimeout(hideTimer))
 </script>
 <template>
-  <div :key="play" class="message-presentation" :class="[{ 'effect-animated': animated, 'ink-message': invisible, 'ink-revealed': revealed }, message.effects?.bubble ? `bubble-effect-${message.effects.bubble}` : '']">
+  <div :key="play" class="message-presentation" :style="bubbleStyle" :class="[{ 'effect-animated': animated, 'ink-message': invisible, 'ink-revealed': revealed }, message.effects?.bubble ? `bubble-effect-${message.effects.bubble}` : '']">
     <div class="message-bubble effect-bubble" @pointermove="scratch">
       <div :class="{ 'ink-content': invisible }" :aria-hidden="invisible && !revealed ? 'true' : undefined" :inert="invisible && !revealed ? true : undefined">
         <button v-if="message.replyTo" type="button" class="reply-quote" :disabled="message.replyTo.deleted" @click="$emit('jump', message.replyTo.id)"><UiIcon name="reply" /><span><strong>{{ message.replyTo.sender || 'Original message' }}</strong><span>{{ message.replyTo.body }}</span></span></button>
