@@ -71,11 +71,12 @@ export async function getChatState(user: Account, conversation: string | null = 
   const originals = !replyIds.length ? [] : conversation
     ? await db`SELECT m.id, m.body, m.effects, u.name AS sender FROM sq_private_messages m JOIN sq_users u ON u.id = m.sender_id WHERE m.thread_id = ${conversation} AND m.id = ANY(${replyIds}::text[])`
     : await db`SELECT id, body, effects, sender FROM chat_messages WHERE id = ANY(${replyIds}::text[])`
+  const canModerateHere = user.canModerateMessages && (!!thread || !user.privateOnly)
   return { messages: messages.map(row => {
     const original = originals.find(parent => parent.id === row.reply_to)
     const replyTo = !row.reply_to ? undefined : original ? { id: original.id, sender: original.sender, body: original.effects?.bubble === 'invisible' ? 'Invisible ink message' : original.body.slice(0, 240) || 'Attachment' } : { id: row.reply_to, sender: '', body: 'Original message deleted', deleted: true }
       const ownsMessage = canOwnMessage(row, user, conversation)
-      return { ...toMessage(row), canDelete: user.role === 'admin' || ownsMessage, canEdit: user.role === 'admin' || ownsMessage, ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
+      return { ...toMessage(row), canDelete: canModerateHere || ownsMessage, canEdit: canModerateHere || ownsMessage, ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
   }), settings: { ...DEFAULT_SETTINGS, ...(settings[0]?.data || {}) },
     people: user.privateOnly ? [] : members.filter(row => !row.private_only).map(row => row.name), members: members.map(row => ({ id: row.id, name: row.name, sharedAllowed: !row.private_only })),
     conversations: threads.map(toThread), conversation, hasMore: rows.length > 200, nextCursor, canSend: thread ? thread.canSend : !user.privateOnly }
@@ -119,12 +120,12 @@ export async function updateMessage(id: string, body: string, user: Account, eff
   const replacement = effects === undefined ? null : JSON.stringify(effects)
   const rows = await db`WITH changed AS (
     UPDATE chat_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END WHERE id = ${id}
-    AND (${user.role === 'admin'} OR (${!user.privateOnly} AND (sender_id = ${user.id} OR (sender_id IS NULL AND sender = ${user.name})))) RETURNING id
+    AND (${user.role === 'admin'} OR (${!user.privateOnly} AND (${user.canModerateMessages} OR sender_id = ${user.id} OR (sender_id IS NULL AND sender = ${user.name})))) RETURNING id
   ), signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
   if (rows.length) return { id }
   const privateRows = await db`WITH changed AS (
     UPDATE sq_private_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END WHERE id = ${id}
-    AND (${user.role === 'admin'} OR (sender_id = ${user.id} AND EXISTS (
+    AND (${user.role === 'admin'} OR ((${user.canModerateMessages} OR sender_id = ${user.id}) AND EXISTS (
       SELECT 1 FROM sq_thread_members m WHERE m.thread_id = sq_private_messages.thread_id AND m.user_id = ${user.id}
     ))) RETURNING id, thread_id
   ), signal AS (
@@ -136,11 +137,11 @@ export async function updateMessage(id: string, body: string, user: Account, eff
 export async function deleteMessage(id: string, user: Account) {
   const db = await store()
   const rows = await db`WITH changed AS (DELETE FROM chat_messages WHERE id = ${id}
-    AND (${user.role === 'admin'} OR (${!user.privateOnly} AND (sender_id = ${user.id} OR (sender_id IS NULL AND sender = ${user.name})))) RETURNING id),
+    AND (${user.role === 'admin'} OR (${!user.privateOnly} AND (${user.canModerateMessages} OR sender_id = ${user.id} OR (sender_id IS NULL AND sender = ${user.name})))) RETURNING id),
     signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
   if (rows.length) { await deleteMessageFiles(id); return true }
   const privateRows = await db`WITH changed AS (DELETE FROM sq_private_messages WHERE id = ${id}
-    AND (${user.role === 'admin'} OR (sender_id = ${user.id} AND EXISTS (
+    AND (${user.role === 'admin'} OR ((${user.canModerateMessages} OR sender_id = ${user.id}) AND EXISTS (
       SELECT 1 FROM sq_thread_members m WHERE m.thread_id = sq_private_messages.thread_id AND m.user_id = ${user.id}
     ))) RETURNING id, thread_id),
     signal AS (SELECT pg_notify('sqchat_changes', json_build_object('users', array_agg(m.user_id))::text)

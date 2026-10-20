@@ -10,6 +10,7 @@ export interface Account {
   status: 'pending' | 'approved' | 'active' | 'disabled'
   canChangePassword: boolean
   canEditCms: boolean
+  canModerateMessages: boolean
 }
 export interface AuthState { user: Account | null; csrf: string }
 export interface Conversation {

@@ -13,7 +13,8 @@ export function publicAccount(row: any): Account {
   return { id: row.id, name: row.name, role: row.role, builtin: row.builtin, status: row.status,
     privateOnly: !!row.private_only, homeConversation: row.home_thread || null, lastConversation: row.last_chat ?? null, chatSort: row.chat_sort === 'contributed' ? 'contributed' : 'viewed',
     canChangePassword: row.role === 'admin' || !!(row.password_change_until && new Date(row.password_change_until).getTime() > Date.now()),
-    canEditCms: row.role === 'admin' || !!row.cms_editor }
+    canEditCms: row.role === 'admin' || !!row.cms_editor,
+    canModerateMessages: row.role === 'admin' || !!row.message_moderator }
 }
 
 export async function sessionForHash(hash: string, touch = false): Promise<AuthSession | null> {

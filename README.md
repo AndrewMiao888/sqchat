@@ -4,7 +4,7 @@ Nuxt 4 chat with a shared room and private conversations for two or more people.
 
 ## Accounts
 
-- Andrew is the only administrator. He can grant other active people access to the room editor in the CMS.
+- Andrew is the only administrator. He can grant active people room editing, message moderation, both, or neither in the CMS.
 - Andrew approves Darius, Harrison, and additional accounts, then privately shares a one-use setup code. New codes expire after 3 days. Andrew can reopen or delete them in the Code store until expiry. Owners choose their passwords; Andrew does not see them.
 - Andrew's last open chat is saved on the server and reopens when he returns. Selecting Everyone saves the shared room as his last chat.
 - Members need Andrew's one-use, 24-hour permission to change their password. A forgotten password can be reset by Andrew issuing a new setup code. Changes and resets revoke sessions immediately.
@@ -17,7 +17,7 @@ The CMS controls room text, colours, fonts, bubble shape, message entrances, tex
 
 Postgres `LISTEN/NOTIFY` and authenticated server-sent events update open pages without refreshes. Private change notifications go only to participants and Andrew. Streams reconnect and recheck sessions. Each chat shows which eligible members are online and who is typing. Typing state contains no message text and expires shortly after input stops; a disconnected tab drops from the online list after its stream lease expires. Browser state uses memory and an HttpOnly session cookie; no localStorage or sessionStorage is used. Chat data is stored in Postgres.
 
-Andrew can grant or remove room editing access for an active account in Settings > Accounts. Room editors can change the room text and appearance, including restoring defaults. Account approvals, passwords, access decisions, audit logs and message moderation remain Andrew-only. Removing permission blocks further settings saves immediately.
+Andrew controls room editing and message moderation separately in Settings > Accounts. Room editors can change room text and appearance, including restoring defaults. Moderators can edit or delete messages in chats they can already open; they cannot view other people's private chats or delete whole conversations. Account approvals, passwords, access decisions, audit logs and conversation deletion remain Andrew-only. Removing a permission blocks further saves or moderation immediately.
 
 Passwords use salted scrypt (`N=131072, r=8, p=1`). Session tokens are random 256-bit values; setup codes are random 6- or 12-digit numbers. New codes are stored as hashes for verification and encrypted for Andrew's 3-day Code store. Production cookies use `__Host-`, Secure, HttpOnly and SameSite Strict. Sessions renew while used and expire after one year without activity, with no fixed lifetime limit. Credential versions invalidate concurrent stale logins after a reset or revocation. There are limits on sign-in attempts, messages, writes, and concurrent live tabs; mutation requests require same-origin JSON and a CSRF token. The server checks permissions on every protected API request and uses parameterized SQL. Responses use no-store, nonce CSP, frame protection, HSTS, and other restrictive headers. Andrew can review an audit log that excludes passwords and message contents.
 
@@ -105,4 +105,4 @@ Subscriptions are bound to a server session and cascade away on sign-out/revocat
 
 The SVG favicon follows accent colour changes immediately in chat and settings. Installed app icons remain the SQ brand icon (platforms cache these separately).
 
-Members can delete their own messages in chats they can access; Andrew can delete any message. Deletion removes the message for everyone, revokes attachments and leaves existing reply quotes marked as deleted. Conversation deletion remains administrator-only.
+Members can delete their own messages in chats they can access. Andrew can delete any message; approved moderators can delete messages in chats they can open. Deletion removes the message for everyone, revokes attachments and leaves existing reply quotes marked as deleted. Conversation deletion remains administrator-only.

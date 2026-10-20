@@ -6,9 +6,24 @@ import type { MessageEffects } from '#shared/types/media'
 definePageMeta({ middleware: 'admin' })
 const { auth, api } = useAuth()
 const isAdmin = computed(() => auth.value.user?.role === 'admin')
-watch(() => auth.value.user?.canEditCms, allowed => { if (!allowed) void navigateTo('/') })
+const canEditRoom = computed(() => !!auth.value.user?.canEditCms)
+const canModerate = computed(() => !!auth.value.user?.canModerateMessages)
+const accessSummary = computed(() => isAdmin.value
+  ? 'You can approve accounts, choose room editors and moderators, and manage conversations. Everyone sees saved room changes live.'
+  : canEditRoom.value && canModerate.value
+    ? 'Andrew gave you room editing and message moderation access in chats you can open.'
+    : canModerate.value
+      ? 'Andrew gave you message moderation access in chats you can open.'
+      : 'Andrew gave you access to edit room content and appearance. Everyone sees saved changes live.')
+const manageIntro = computed(() => isAdmin.value
+  ? 'Edit the room and manage conversations.'
+  : canEditRoom.value && canModerate.value
+    ? 'Edit the room and moderate messages in your chats.'
+    : canModerate.value ? 'Moderate messages in your chats.' : 'Edit what appears in the room.')
+watch([canEditRoom, canModerate], ([editing, moderating]) => { if (!editing && !moderating) void navigateTo('/') })
 const conversation = ref('')
 const { data, refresh, error } = await useAsyncData('manage-state', () => api<ChatState>('/api/state', { query: { conversation: conversation.value } }), { default: emptyChatState, watch: [conversation] })
+onMounted(() => { if (auth.value.user?.privateOnly && !conversation.value) conversation.value = data.value.conversations[0]?.id || '' })
 const { data: auditLog, refresh: refreshAudit } = await useAsyncData('audit', () => isAdmin.value ? api<any[]>('/api/admin/audit') : Promise.resolve([]), { default: () => [] })
 const form = reactive<ChatSettings>({ ...data.value.settings })
 useHead(() => ({ link: [{ rel: 'icon', type: 'image/svg+xml', key: 'favicon', href: '/favicon.svg?accent=' + encodeURIComponent(form.accentColor) }] }))
@@ -75,15 +90,15 @@ useHead({ title: 'Manage chat / SQ Chat' })
 
 <template>
   <div class="site-shell manage-shell" :class="`bubble-${form.bubbleStyle}`" :style="themeStyle">
-    <header class="topbar"><BrandLogo /><span class="topbar-caption">Room editor</span><NuxtLink to="/" class="topbar-link"><UiIcon name="arrow-left" /> Back to chat</NuxtLink></header>
+    <header class="topbar"><BrandLogo /><span class="topbar-caption">{{ canEditRoom ? 'Room editor' : 'Message moderation' }}</span><NuxtLink to="/" class="topbar-link"><UiIcon name="arrow-left" /> Back to chat</NuxtLink></header>
     <main class="manage-main">
-      <div class="manage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> ROOM SETTINGS</div><h1>Make this space yours.</h1><p>Edit what appears in the room{{ isAdmin ? ' and manage the conversation' : '' }}.</p></div><div class="manage-pills"><span class="live-badge" :class="{ reconnecting: connection !== 'live' }"><span class="live-dot"></span>{{ connection === 'live' ? 'Live sync' : 'Connecting…' }}</span><span class="public-pill">{{ isAdmin ? 'Administrator' : 'Room editor' }}</span></div></div>
-      <p class="public-explainer">{{ isAdmin ? 'You can approve accounts, grant room editing access, and moderate messages. Everyone sees saved room changes live.' : 'Andrew gave you access to edit room content and appearance. Everyone sees saved changes live.' }}</p>
+      <div class="manage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> {{ canEditRoom ? 'ROOM SETTINGS' : 'MESSAGE MODERATION' }}</div><h1>{{ canEditRoom ? 'Make this space yours.' : 'Keep the conversation welcoming.' }}</h1><p>{{ manageIntro }}</p></div><div class="manage-pills"><span class="live-badge" :class="{ reconnecting: connection !== 'live' }"><span class="live-dot"></span>{{ connection === 'live' ? 'Live sync' : 'Connecting…' }}</span><span class="public-pill">{{ isAdmin ? 'Administrator' : canEditRoom && canModerate ? 'Room editor and moderator' : canModerate ? 'Moderator' : 'Room editor' }}</span></div></div>
+      <p class="public-explainer">{{ accessSummary }}</p>
       <div v-if="error" class="alert error-alert">Could not load room content. <button class="text-button" type="button" @click="refresh()">Try again</button></div>
       <div v-if="status" class="alert success-alert" role="status">{{ status }}</div>
       <div v-if="failure" class="alert error-alert" role="alert">{{ failure }}</div>
-      <div class="manage-grid" :class="{ 'cms-only': !isAdmin }">
-        <section class="manage-card"><div class="card-title"><span class="card-icon"><SparkIcon /></span><div><h2>Room content</h2><p>The words everyone sees in the chat.</p></div></div>
+      <div class="manage-grid" :class="{ 'cms-only': !(canEditRoom && canModerate) }">
+        <section v-if="canEditRoom" class="manage-card"><div class="card-title"><span class="card-icon"><SparkIcon /></span><div><h2>Room content</h2><p>The words everyone sees in the chat.</p></div></div>
           <form class="settings-form" @submit.prevent="saveSettings()">
             <label>Room title <input v-model="form.title" maxlength="70" required placeholder="The group chat"></label>
             <label>Short description <input v-model="form.subtitle" maxlength="160" required placeholder="A little space for everyone."></label>
@@ -117,21 +132,21 @@ useHead({ title: 'Manage chat / SQ Chat' })
             </div>
           </form>
         </section>
-        <div v-if="isAdmin" class="manage-side-column">
-        <ChatRequests />
-        <AccountManager />
+        <div v-if="canModerate" class="manage-side-column">
+        <ChatRequests v-if="isAdmin" />
+        <AccountManager v-if="isAdmin" />
         <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon"><MessageIcon /></span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>
-          <label class="conversation-filter">Conversation<select v-model="conversation"><option value="">Everyone / shared room</option><option v-for="thread in data.conversations" :key="thread.id" :value="thread.id">{{ threadLabel(thread) }}</option></select></label>
-          <button class="plain-button danger-button" @click="removeConversation"><UiIcon name="trash" /> {{ conversation ? 'Delete conversation' : 'Clear shared room' }}</button>
+          <label class="conversation-filter">Conversation<select v-model="conversation"><option v-if="!auth.user?.privateOnly" value="">Everyone / shared room</option><option v-for="thread in data.conversations" :key="thread.id" :value="thread.id">{{ threadLabel(thread) }}</option></select></label>
+          <button v-if="isAdmin" class="plain-button danger-button" @click="removeConversation"><UiIcon name="trash" /> {{ conversation ? 'Delete conversation' : 'Clear shared room' }}</button>
           <div v-if="!data.messages.length" class="manage-empty">No messages yet. Go to the chat to start talking.</div>
           <div v-else class="manage-messages">
             <article v-for="message in [...data.messages].reverse()" :key="message.id" class="manage-message"><div class="manage-message-top"><strong>{{ message.sender }}</strong><time :datetime="message.createdAt">{{ formatDate(message.createdAt) }}</time></div>
               <template v-if="editingId === message.id"><MessageEditFields v-model:body="editingBody" v-model:effects="editingEffects" :sender="message.sender" /><div class="message-actions"><button class="small-primary" type="button" :disabled="saving || !editingBody.trim()" @click="saveMessage">Save</button><button class="plain-button" type="button" @click="editingId = null">Cancel</button></div></template>
-              <template v-else><MessageContent :message="message" :animated="false" /><div class="message-actions"><button class="plain-button" type="button" @click="startEditing(message)">Edit</button><button class="plain-button danger-button" type="button" @click="removeMessage(message.id)">Delete</button></div></template>
+              <template v-else><MessageContent :message="message" :animated="false" /><div class="message-actions"><button v-if="message.canEdit" class="plain-button" type="button" @click="startEditing(message)">Edit</button><button v-if="message.canDelete" class="plain-button danger-button" type="button" @click="removeMessage(message.id)">Delete</button></div></template>
             </article>
           </div>
         </section>
-<section class="manage-card"><div class="card-title"><span class="card-icon"><UiIcon name="shield" /></span><div><h2>Security activity</h2><p>Recent sign-ins and account changes. Passwords and message contents are never recorded here.</p></div></div><div class="audit-list"><article v-for="(entry, index) in auditLog" :key="index"><strong>{{ entry.action.replaceAll('.', ' / ').replaceAll('-', ' ') }}</strong><p>{{ entry.actor || 'Visitor' }}<span v-if="entry.target"> / {{ entry.target }}</span></p><time :datetime="entry.createdAt">{{ formatDate(entry.createdAt) }}</time></article></div></section>
+<section v-if="isAdmin" class="manage-card"><div class="card-title"><span class="card-icon"><UiIcon name="shield" /></span><div><h2>Security activity</h2><p>Recent sign-ins and account changes. Passwords and message contents are never recorded here.</p></div></div><div class="audit-list"><article v-for="(entry, index) in auditLog" :key="index"><strong>{{ entry.action.replaceAll('.', ' / ').replaceAll('-', ' ') }}</strong><p>{{ entry.actor || 'Visitor' }}<span v-if="entry.target"> / {{ entry.target }}</span></p><time :datetime="entry.createdAt">{{ formatDate(entry.createdAt) }}</time></article></div></section>
         </div>
       </div>
     </main>

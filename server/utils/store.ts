@@ -71,6 +71,7 @@ export async function store() {
     )`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_auto_approve BOOLEAN NOT NULL DEFAULT FALSE`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS cms_editor BOOLEAN NOT NULL DEFAULT FALSE`
+    await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS message_moderator BOOLEAN NOT NULL DEFAULT FALSE`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS last_chat TEXT`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_sort TEXT NOT NULL DEFAULT 'viewed' CHECK (chat_sort IN ('viewed','contributed'))`
     await db`CREATE TABLE IF NOT EXISTS sq_thread_views (user_id TEXT NOT NULL REFERENCES sq_users(id) ON DELETE CASCADE, thread_id TEXT NOT NULL REFERENCES sq_threads(id) ON DELETE CASCADE, last_viewed TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (user_id, thread_id))`
