@@ -4,6 +4,7 @@ import type { MessageEffects } from '#shared/types/media'
 import { store, signal } from './store'
 import type { Account, Conversation } from '#shared/types/auth'
 import { DEFAULT_SETTINGS, type ChatMessage, type ChatSettings, type ChatState } from '#shared/types/chat'
+import { getReminderSettings } from './reminderSettings'
 
 export function normalizePersonName(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -47,13 +48,13 @@ export async function getChatState(user: Account, conversation: string | null = 
   const db = await store()
   const thread = conversation ? await findThread(user, conversation) : null
   if (thread) await db`INSERT INTO sq_thread_views (user_id, thread_id, last_viewed) VALUES (${user.id}, ${conversation}, NOW()) ON CONFLICT (user_id, thread_id) DO UPDATE SET last_viewed = NOW()`
-  const [rows, settings, members, threads] = await Promise.all([
+  const [rows, settings, members, threads, reminderSettings] = await Promise.all([
     thread ? db`SELECT m.*, m.created_at::text AS cursor_at, u.name AS sender FROM (
       SELECT * FROM sq_private_messages WHERE thread_id = ${thread.id} AND (${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''})) ORDER BY created_at DESC, id DESC LIMIT 201
     ) m JOIN sq_users u ON u.id = m.sender_id ORDER BY m.created_at, m.id`
       : user.privateOnly ? Promise.resolve([]) : db`SELECT m.*, m.created_at::text AS cursor_at FROM (SELECT * FROM chat_messages WHERE ${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''}) ORDER BY created_at DESC, id DESC LIMIT 201) m ORDER BY created_at, id`,
     db`SELECT data FROM chat_settings WHERE id = TRUE`,
-    db`SELECT id, name, role, private_only FROM sq_users WHERE status = 'active' ORDER BY builtin DESC, created_at, name`,
+    db`SELECT id, name, private_only FROM sq_users WHERE status = 'active' ORDER BY builtin DESC, created_at, name`,
     db`SELECT t.*,
       (SELECT COALESCE(json_agg(json_build_object('id', mu.id, 'name', mu.name, 'active', mu.status = 'active') ORDER BY tm.joined_at, mu.name), '[]'::json)
        FROM sq_thread_members tm JOIN sq_users mu ON mu.id = tm.user_id WHERE tm.thread_id = t.id) AS members,
@@ -61,7 +62,8 @@ export async function getChatState(user: Account, conversation: string | null = 
       COALESCE((SELECT MAX(tv.last_viewed) FROM sq_thread_views tv WHERE tv.thread_id = t.id AND tv.user_id = ${user.id}), to_timestamp(0)) AS last_viewed
       FROM sq_threads t
       WHERE ${user.role === 'admin'} OR EXISTS (SELECT 1 FROM sq_thread_members own WHERE own.thread_id = t.id AND own.user_id = ${user.id})
-      ORDER BY CASE WHEN ${user.chatSort} = 'contributed' THEN COALESCE((SELECT MAX(pm2.created_at) FROM sq_private_messages pm2 WHERE pm2.thread_id = t.id), t.created_at) ELSE COALESCE((SELECT MAX(tv2.last_viewed) FROM sq_thread_views tv2 WHERE tv2.thread_id = t.id AND tv2.user_id = ${user.id}), to_timestamp(0)) END DESC, t.created_at DESC`
+      ORDER BY CASE WHEN ${user.chatSort} = 'contributed' THEN COALESCE((SELECT MAX(pm2.created_at) FROM sq_private_messages pm2 WHERE pm2.thread_id = t.id), t.created_at) ELSE COALESCE((SELECT MAX(tv2.last_viewed) FROM sq_thread_views tv2 WHERE tv2.thread_id = t.id AND tv2.user_id = ${user.id}), to_timestamp(0)) END DESC, t.created_at DESC`,
+    user.role === 'admin' ? getReminderSettings() : Promise.resolve(undefined)
   ])
   const messages = rows.slice(-200)
   const nextCursor = messages[0] ? Buffer.from(JSON.stringify({ at: messages[0].cursor_at, id: messages[0].id })).toString('base64url') : null
@@ -72,10 +74,7 @@ export async function getChatState(user: Account, conversation: string | null = 
   const reminders = messages.length ? await db`SELECT message_id, user_id, reminded_at FROM sq_message_reminders
     WHERE message_id = ANY(${messages.map(row => row.id)}::text[])` : []
   const eligibleReaders = thread
-    ? [...new Map([
-        ...thread.members.filter(member => member.active).map(member => ({ id: member.id, name: member.name })),
-        ...members.filter(member => member.role === 'admin').map(member => ({ id: member.id, name: member.name }))
-      ].map(member => [member.id, member] as const)).values()]
+    ? thread.members.filter(member => member.active).map(member => ({ id: member.id, name: member.name }))
     : members.filter(row => !row.private_only).map(row => ({ id: row.id, name: row.name }))
   const readTimes = new Map<string, Map<string, string>>()
   const reminderTimes = new Map<string, Map<string, string>>()
@@ -104,7 +103,8 @@ export async function getChatState(user: Account, conversation: string | null = 
         ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
   }), settings: { ...DEFAULT_SETTINGS, ...(settings[0]?.data || {}) },
     people: user.privateOnly ? [] : members.filter(row => !row.private_only).map(row => row.name), members: members.map(row => ({ id: row.id, name: row.name, sharedAllowed: !row.private_only })),
-    conversations: threads.map(toThread), conversation, hasMore: rows.length > 200, nextCursor, canSend: thread ? thread.canSend : !user.privateOnly }
+    conversations: threads.map(toThread), conversation, hasMore: rows.length > 200, nextCursor, canSend: thread ? thread.canSend : !user.privateOnly,
+    ...(reminderSettings ? { reminderSettings } : {}) }
 }
 export async function addMessage(user: Account, body: string, conversation: string | null, effects: MessageEffects = {}, attachments: string[] = [], replyTo: string | null = null) {
   if (!conversation && user.privateOnly) throw createError({ statusCode: 403, statusMessage: 'This account uses private conversations only.' })

@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { purgeExpiredSetupCodes } from '../../utils/setupCodes'
+import { dispatchDueReminders } from '../../utils/automaticReminders'
 
 export default defineEventHandler(async event => {
   const expected = process.env.CRON_SECRET || ''
@@ -9,5 +10,6 @@ export default defineEventHandler(async event => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized.' })
   }
   await purgeExpiredSetupCodes()
-  return { ok: true }
+  const remindersSent = await dispatchDueReminders()
+  return { ok: true, remindersSent }
 })

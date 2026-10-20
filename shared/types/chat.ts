@@ -1,5 +1,6 @@
 import type { Conversation } from './auth'
 import type { Attachment, MessageEffects } from './media'
+import type { ReminderSettings } from './reminders'
 export const PEOPLE = ['Andrew', 'Darius', 'Harrison'] as const
 
 export type Person = string
@@ -45,6 +46,7 @@ export interface ChatState {
   hasMore?: boolean
   nextCursor?: string | null
   canSend: boolean
+  reminderSettings?: ReminderSettings
 }
 
 export const DEFAULT_SETTINGS: ChatSettings = {

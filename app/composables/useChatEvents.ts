@@ -1,7 +1,9 @@
 export function useChatEvents(onChange: (payload?: { conversation?: string | null; receipt?: boolean }) => void, onPresence?: (payload?: { conversation?: string | null; online?: boolean }) => void) {
-  const { auth, load } = useAuth()
+  const { auth, api, load } = useAuth()
   const connection = ref<'connecting' | 'live' | 'reconnecting'>('connecting')
   let source: EventSource | undefined
+  let reminderTimer: ReturnType<typeof setInterval> | undefined
+  const checkReminders = () => { void api('/api/reminders/check', { method: 'POST', body: {} }).catch(() => {}) }
 
   const update = (event?: MessageEvent) => {
     connection.value = 'live'
@@ -14,7 +16,7 @@ export function useChatEvents(onChange: (payload?: { conversation?: string | nul
   }
 
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'visible') { onChange(); onPresence?.() }
+    if (document.visibilityState === 'visible') { onChange(); onPresence?.(); checkReminders() }
   }
 
   onMounted(() => {
@@ -38,10 +40,13 @@ export function useChatEvents(onChange: (payload?: { conversation?: string | nul
       void load().then(user => { if (!user) { source?.close(); clearNuxtData(); void navigateTo('/login') } }).catch(() => {})
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
+    checkReminders()
+    reminderTimer = setInterval(() => { if (document.visibilityState === 'visible') checkReminders() }, 5 * 60 * 1000)
   })
 
   onUnmounted(() => {
     source?.close()
+    if (reminderTimer) clearInterval(reminderTimer)
     document.removeEventListener('visibilitychange', onVisibilityChange)
   })
 

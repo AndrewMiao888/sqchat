@@ -133,6 +133,7 @@ useHead({ title: 'Manage chat / SQ Chat' })
           </form>
         </section>
         <div v-if="canModerate" class="manage-side-column">
+        <ReminderControls v-if="isAdmin" :settings="data.reminderSettings" />
         <ChatRequests v-if="isAdmin" />
         <AccountManager v-if="isAdmin" />
         <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon"><MessageIcon /></span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>

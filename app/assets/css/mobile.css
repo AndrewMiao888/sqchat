@@ -12,6 +12,10 @@
 .message-receipts summary:hover { text-decoration: underline; }
 .message-receipt-list { padding: 5px 9px; margin-top: 4px; border-radius: 7px; background: #f5f8f3; overflow-wrap: anywhere; }
 .message-receipt-list p { margin: 3px 0; }
+.reminder-controls-card .settings-form { gap: 12px; }
+.reminder-controls-card .reminder-toggle { display: flex; align-items: flex-start; gap: 9px; }
+.reminder-controls-card .reminder-toggle input { width: auto; margin-top: 2px; }
+.reminder-delay { display: grid; gap: 10px; padding: 12px; border-radius: 9px; background: #f5f8f3; }
 .message-unread-people { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .message-unread-person { display: inline-flex; align-items: center; gap: 4px; }
 .reminder-button { color: var(--chat-accent,#52745a); font-size: 10px; text-decoration: underline; }

@@ -1,6 +1,7 @@
 import { requireAdmin, rateLimit } from '../utils/auth'
 import { store, audit } from '../utils/store'
 import { pushUnreadReminder } from '../utils/push'
+import { getReminderSettings } from '../utils/reminderSettings'
 
 export default defineEventHandler(async event => {
   const { user } = await requireAdmin(event)
@@ -12,6 +13,7 @@ export default defineEventHandler(async event => {
     throw createError({ statusCode: 400, statusMessage: 'Choose an unread person in this conversation.' })
   }
   await rateLimit(`reminders:${user.id}`, 20, 60)
+  if (!(await getReminderSettings()).manualEnabled) throw createError({ statusCode: 403, statusMessage: 'Manual reminders are turned off.' })
   const db = await store()
   const conversation: string | null = input.conversation
   const rows = conversation
