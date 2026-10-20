@@ -11,6 +11,8 @@ export default defineEventHandler(async event => {
     const results = await db.transaction([
       db`LOCK TABLE chat_messages IN EXCLUSIVE MODE`,
       db`UPDATE sq_attachments SET status = 'deleted' WHERE thread_id IS NULL AND message_id IN (SELECT id FROM chat_messages) RETURNING blob_path`,
+      db`DELETE FROM sq_message_reads WHERE message_id IN (SELECT id FROM chat_messages)`,
+      db`DELETE FROM sq_message_reminders WHERE message_id IN (SELECT id FROM chat_messages)`,
       db`DELETE FROM chat_messages`,
       db`SELECT pg_notify('sqchat_changes', 'change')`
     ])
@@ -20,6 +22,8 @@ export default defineEventHandler(async event => {
     const results = await db.transaction([
       db`SELECT id FROM sq_threads WHERE id = ${id} FOR UPDATE`,
       db`UPDATE sq_attachments SET status = 'deleted', thread_id = NULL WHERE thread_id = ${id} RETURNING blob_path`,
+      db`DELETE FROM sq_message_reads WHERE message_id IN (SELECT id FROM sq_private_messages WHERE thread_id = ${id})`,
+      db`DELETE FROM sq_message_reminders WHERE message_id IN (SELECT id FROM sq_private_messages WHERE thread_id = ${id})`,
       db`DELETE FROM sq_private_messages WHERE thread_id = ${id}`,
       db`DELETE FROM sq_thread_members WHERE thread_id = ${id}`,
       db`UPDATE sq_users SET home_thread = NULL WHERE home_thread = ${id}`,

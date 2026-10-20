@@ -62,6 +62,15 @@ export async function store() {
       thread_id TEXT NOT NULL REFERENCES sq_threads(id), user_id TEXT NOT NULL REFERENCES sq_users(id),
       joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (thread_id, user_id)
     )`
+    await db`CREATE TABLE IF NOT EXISTS sq_message_reads (
+      message_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES sq_users(id) ON DELETE CASCADE,
+      read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (message_id, user_id)
+    )`
+    await db`CREATE TABLE IF NOT EXISTS sq_message_reminders (
+      message_id TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES sq_users(id) ON DELETE CASCADE,
+      reminded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (message_id, user_id)
+    )`
+    await db`CREATE INDEX IF NOT EXISTS sq_message_reads_user ON sq_message_reads(user_id, message_id)`
     await db`CREATE TABLE IF NOT EXISTS sq_chat_requests (
       id TEXT PRIMARY KEY, requester_id TEXT NOT NULL REFERENCES sq_users(id),
       kind TEXT NOT NULL CHECK (kind IN ('create','add')),

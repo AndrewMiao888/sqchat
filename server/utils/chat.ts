@@ -53,7 +53,7 @@ export async function getChatState(user: Account, conversation: string | null = 
     ) m JOIN sq_users u ON u.id = m.sender_id ORDER BY m.created_at, m.id`
       : user.privateOnly ? Promise.resolve([]) : db`SELECT m.*, m.created_at::text AS cursor_at FROM (SELECT * FROM chat_messages WHERE ${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''}) ORDER BY created_at DESC, id DESC LIMIT 201) m ORDER BY created_at, id`,
     db`SELECT data FROM chat_settings WHERE id = TRUE`,
-    db`SELECT id, name, private_only FROM sq_users WHERE status = 'active' ORDER BY builtin DESC, created_at, name`,
+    db`SELECT id, name, role, private_only FROM sq_users WHERE status = 'active' ORDER BY builtin DESC, created_at, name`,
     db`SELECT t.*,
       (SELECT COALESCE(json_agg(json_build_object('id', mu.id, 'name', mu.name, 'active', mu.status = 'active') ORDER BY tm.joined_at, mu.name), '[]'::json)
        FROM sq_thread_members tm JOIN sq_users mu ON mu.id = tm.user_id WHERE tm.thread_id = t.id) AS members,
@@ -67,6 +67,26 @@ export async function getChatState(user: Account, conversation: string | null = 
   const nextCursor = messages[0] ? Buffer.from(JSON.stringify({ at: messages[0].cursor_at, id: messages[0].id })).toString('base64url') : null
   const files = messages.length ? await db`SELECT id, message_id, name, content_type, size FROM sq_attachments
     WHERE message_id = ANY(${messages.map(row => row.id)}::text[]) AND status = 'attached' ORDER BY created_at, id` : []
+  const reads = messages.length ? await db`SELECT message_id, user_id, read_at FROM sq_message_reads
+    WHERE message_id = ANY(${messages.map(row => row.id)}::text[])` : []
+  const reminders = messages.length ? await db`SELECT message_id, user_id, reminded_at FROM sq_message_reminders
+    WHERE message_id = ANY(${messages.map(row => row.id)}::text[])` : []
+  const eligibleReaders = thread
+    ? [...new Map([
+        ...thread.members.filter(member => member.active).map(member => ({ id: member.id, name: member.name })),
+        ...members.filter(member => member.role === 'admin').map(member => ({ id: member.id, name: member.name }))
+      ].map(member => [member.id, member] as const)).values()]
+    : members.filter(row => !row.private_only).map(row => ({ id: row.id, name: row.name }))
+  const readTimes = new Map<string, Map<string, string>>()
+  const reminderTimes = new Map<string, Map<string, string>>()
+  for (const read of reads) {
+    if (!readTimes.has(read.message_id)) readTimes.set(read.message_id, new Map())
+    readTimes.get(read.message_id)!.set(read.user_id, new Date(read.read_at).toISOString())
+  }
+  for (const reminder of reminders) {
+    if (!reminderTimes.has(reminder.message_id)) reminderTimes.set(reminder.message_id, new Map())
+    reminderTimes.get(reminder.message_id)!.set(reminder.user_id, new Date(reminder.reminded_at).toISOString())
+  }
   const replyIds = messages.map(row => row.reply_to).filter(Boolean)
   const originals = !replyIds.length ? [] : conversation
     ? await db`SELECT m.id, m.body, m.effects, u.name AS sender FROM sq_private_messages m JOIN sq_users u ON u.id = m.sender_id WHERE m.thread_id = ${conversation} AND m.id = ANY(${replyIds}::text[])`
@@ -76,7 +96,12 @@ export async function getChatState(user: Account, conversation: string | null = 
     const original = originals.find(parent => parent.id === row.reply_to)
     const replyTo = !row.reply_to ? undefined : original ? { id: original.id, sender: original.sender, body: original.effects?.bubble === 'invisible' ? 'Invisible ink message' : original.body.slice(0, 240) || 'Attachment' } : { id: row.reply_to, sender: '', body: 'Original message deleted', deleted: true }
       const ownsMessage = canOwnMessage(row, user, conversation)
-      return { ...toMessage(row), canDelete: canModerateHere || ownsMessage, canEdit: canModerateHere || ownsMessage, ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
+      const recipients = eligibleReaders.filter(member => row.sender_id ? member.id !== row.sender_id : member.name !== row.sender)
+      const seen = readTimes.get(row.id)
+      return { ...toMessage(row), canDelete: canModerateHere || ownsMessage, canEdit: canModerateHere || ownsMessage,
+        readBy: recipients.filter(member => seen?.has(member.id)).map(member => ({ ...member, at: seen!.get(member.id)! })),
+        unreadBy: recipients.filter(member => !seen?.has(member.id)).map(member => ({ ...member, remindedAt: reminderTimes.get(row.id)?.get(member.id) })),
+        ...(replyTo ? { replyTo } : {}), attachments: files.filter(file => file.message_id === row.id).map(file => ({ id: file.id, name: file.name, type: file.content_type, size: Number(file.size) })) }
   }), settings: { ...DEFAULT_SETTINGS, ...(settings[0]?.data || {}) },
     people: user.privateOnly ? [] : members.filter(row => !row.private_only).map(row => row.name), members: members.map(row => ({ id: row.id, name: row.name, sharedAllowed: !row.private_only })),
     conversations: threads.map(toThread), conversation, hasMore: rows.length > 200, nextCursor, canSend: thread ? thread.canSend : !user.privateOnly }
@@ -152,6 +177,8 @@ export async function deleteMessage(id: string, user: Account) {
 }
 async function deleteMessageFiles(id: string) {
   const db = await store()
+  await db`DELETE FROM sq_message_reads WHERE message_id = ${id}`
+  await db`DELETE FROM sq_message_reminders WHERE message_id = ${id}`
   const files = await db`UPDATE sq_attachments SET status = 'deleted' WHERE message_id = ${id} RETURNING blob_path`
   await Promise.allSettled(files.map(file => del(file.blob_path)))
 }

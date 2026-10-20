@@ -65,12 +65,24 @@ export async function pushChatRequest(requesterName: string, details: string) {
   await deliverPush(rows, { title: 'Chat approval needed', body: `${requesterName} wants to ${details}. Approve or decline in SQ Chat.`, tag: 'sq-chat-request', url: '/manage#chat-requests' })
 }
 
+export async function pushUnreadReminder(userId: string, conversation: string | null, messageId: string) {
+  const db = await store()
+  const rows = await db`SELECT p.endpoint, p.subscription FROM sq_push p
+    JOIN sq_sessions s ON s.token_hash = p.session_hash JOIN sq_users u ON u.id = s.user_id
+    WHERE u.id = ${userId} AND u.status = 'active' AND s.session_version = u.session_version
+      AND s.expires_at > NOW() AND s.last_seen > NOW() - INTERVAL '365 days'
+      AND NOT EXISTS (SELECT 1 FROM sq_message_reads r WHERE r.message_id = ${messageId} AND r.user_id = u.id)`
+  return await deliverPush(rows, { title: 'Unread message reminder',
+    body: 'You have an unread message in SQ Chat.', tag: `reminder-${messageId}`,
+    url: conversation ? '/?chat=' + encodeURIComponent(conversation) + '#message-' + encodeURIComponent(messageId) : '/#message-' + encodeURIComponent(messageId) }) > 0
+}
+
 async function deliverPush(rows: Record<string, any>[], notification: { title: string; body: string; tag: string; url: string }) {
-  if (!rows.length) return
+  if (!rows.length) return 0
   const db = await store()
   const keys = await pushKeys()
   const payload = JSON.stringify(notification)
-  await Promise.all(rows.map(async row => {
+  const results = await Promise.all(rows.map(async row => {
     if (!validSubscription(row.subscription)) return
     try {
       await webpush.sendNotification(row.subscription, payload, {
@@ -82,6 +94,7 @@ async function deliverPush(rows: Record<string, any>[], notification: { title: s
       return { status: 'failed' as const, code: Number(error.statusCode) || 0 }
     }
   }))
+  return results.filter(result => result?.status === 'accepted').length
 }
 
 export async function sendTestPush(sessionHash: string) {

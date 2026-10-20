@@ -15,7 +15,7 @@ The CMS controls room text, colours, fonts, bubble shape, message entrances, tex
 
 ## Live updates and security
 
-Postgres `LISTEN/NOTIFY` and authenticated server-sent events update open pages without refreshes. Private change notifications go only to participants and Andrew. Streams reconnect and recheck sessions. Each chat shows which eligible members are online and who is typing. Typing state contains no message text and expires shortly after input stops; a disconnected tab drops from the online list after its stream lease expires. Browser state uses memory and an HttpOnly session cookie; no localStorage or sessionStorage is used. Chat data is stored in Postgres.
+Postgres `LISTEN/NOTIFY` and authenticated server-sent events update open pages without refreshes. Private change notifications go only to participants and Andrew. Streams reconnect and recheck sessions. Each chat shows which eligible members are online and who is typing. Typing state contains no message text and expires shortly after input stops; a disconnected tab drops from the online list after its stream lease expires. Each message shows who has read it and who has not, including Andrew in private chats. A read is recorded when the message enters the visible chat area. Browser state uses memory and an HttpOnly session cookie; no localStorage or sessionStorage is used. Chat data is stored in Postgres.
 
 Andrew controls room editing and message moderation separately in Settings > Accounts. Room editors can change room text and appearance, including restoring defaults. Moderators can edit or delete messages in chats they can already open; they cannot view other people's private chats or delete whole conversations. Account approvals, passwords, access decisions, audit logs and conversation deletion remain Andrew-only. Removing a permission blocks further saves or moderation immediately.
 
@@ -102,6 +102,8 @@ If a route's JavaScript download fails during startup or navigation, the app ret
 Enable in My account > Device notifications on each device. Web Push dispatches after a message is saved, with high urgency and a one-hour delivery TTL. Vercel's request waitUntil keeps dispatch alive after the message response. Browser permission is required; iOS/iPadOS 16.4+ requires adding SQ Chat to the Home Screen. Delivery timing depends on connectivity, browser/OS settings and Focus mode.
 
 Subscriptions are bound to a server session and cascade away on sign-out/revocation. Only active shared-room members or private-chat participants receive notifications; senders are excluded. Lock-screen previews contain no message text or sender names. The service worker caches no conversations and notification clicks preserve the app's unsent-message navigation guard. VAPID signing keys are generated once and stored in server-only sq_config; include this table in protected database backups. No notification settings or messages use localStorage.
+
+Andrew can open a message's read details and send one extra push reminder to each unread participant. The reminder contains no message text. The server records each sent reminder and blocks duplicates; a recipient needs an active device notification subscription.
 
 The SVG favicon follows accent colour changes immediately in chat and settings. Installed app icons remain the SQ brand icon (platforms cache these separately).
 

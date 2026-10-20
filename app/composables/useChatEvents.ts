@@ -1,16 +1,16 @@
-export function useChatEvents(onChange: (payload?: { conversation?: string | null }) => void, onPresence?: (payload?: { conversation?: string | null; online?: boolean }) => void) {
+export function useChatEvents(onChange: (payload?: { conversation?: string | null; receipt?: boolean }) => void, onPresence?: (payload?: { conversation?: string | null; online?: boolean }) => void) {
   const { auth, load } = useAuth()
   const connection = ref<'connecting' | 'live' | 'reconnecting'>('connecting')
   let source: EventSource | undefined
 
   const update = (event?: MessageEvent) => {
     connection.value = 'live'
-    let payload: { conversation?: string | null } | undefined
+    let payload: { conversation?: string | null; receipt?: boolean } | undefined
     try { payload = event?.data ? JSON.parse(event.data) : undefined } catch {}
     onChange(payload)
-    onPresence?.()
+    if (!payload?.receipt) onPresence?.()
     // Account permissions can change while this tab remains open.
-    void load().catch(() => {})
+    if (!payload?.receipt) void load().catch(() => {})
   }
 
   const onVisibilityChange = () => {

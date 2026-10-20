@@ -15,6 +15,8 @@ export interface ChatMessage {
   attachments?: Attachment[]
   effects?: MessageEffects
   replyTo?: { id: string; sender: string; body: string; deleted?: boolean }
+  readBy?: { id: string; name: string; at: string }[]
+  unreadBy?: { id: string; name: string; remindedAt?: string }[]
 }
 
 export interface ChatSettings {
