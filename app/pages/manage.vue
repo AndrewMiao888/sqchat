@@ -30,6 +30,7 @@ useHead(() => ({ link: [{ rel: 'icon', type: 'image/svg+xml', key: 'favicon', hr
 const themeStyle = computed(() => chatThemeStyle(form))
 const { connection } = useChatEvents(() => { void refresh(); if (isAdmin.value) void refreshAudit() })
 const saving = ref(false)
+const clearingMessages = ref(false)
 const restoring = ref(false)
 const confirmRestore = ref(false)
 const status = ref('')
@@ -81,6 +82,17 @@ async function removeConversation() {
   if (!window.confirm(conversation.value ? 'Delete this conversation and every message and file for everyone?' : 'Clear all shared-room messages and files for everyone?')) return
   try { await api('/api/conversations/' + (conversation.value || 'shared'), { method: 'DELETE', body: {} }); conversation.value = ''; await refresh(); status.value = 'Conversation cleared.' }
   catch (error: any) { failure.value = error?.data?.statusMessage || 'Could not delete the conversation.' }
+}
+async function clearConversationMessages() {
+  if (!conversation.value || clearingMessages.value) return
+  if (!window.confirm('Clear every message in this chat for everyone? Message attachments, reactions, read receipts and reminders will also be removed. The chat, its members and its appearance will stay.')) return
+  clearingMessages.value = true; failure.value = ''; status.value = ''
+  try {
+    await api(`/api/conversations/${encodeURIComponent(conversation.value)}/messages`, { method: 'DELETE', body: {} })
+    status.value = 'All messages in this chat were cleared.'
+    await refresh()
+  } catch (error: any) { failure.value = error?.data?.statusMessage || 'Could not clear this chat.' }
+  finally { clearingMessages.value = false }
 }
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Australia/Adelaide' }).format(new Date(date))
@@ -140,6 +152,7 @@ useHead({ title: 'Manage chat / SQ Chat' })
         <AccountManager v-if="isAdmin" />
         <section class="manage-card"><div class="card-title"><span class="card-icon messages-icon"><MessageIcon /></span><div><h2>Messages <span class="message-count">{{ data.messages.length }}</span></h2><p>Edit or remove anything in the conversation.</p></div></div>
           <label class="conversation-filter">Conversation<select v-model="conversation"><option v-if="!auth.user?.privateOnly" value="">Everyone / shared room</option><option v-for="thread in data.conversations" :key="thread.id" :value="thread.id">{{ threadLabel(thread) }}</option></select></label>
+          <button v-if="isAdmin && conversation" class="plain-button danger-button" type="button" :disabled="clearingMessages" @click="clearConversationMessages"><UiIcon name="trash" /> {{ clearingMessages ? 'Clearing…' : 'Clear all messages' }}</button>
           <button v-if="isAdmin" class="plain-button danger-button" @click="removeConversation"><UiIcon name="trash" /> {{ conversation ? 'Delete conversation' : 'Clear shared room' }}</button>
           <div v-if="!data.messages.length" class="manage-empty">No messages yet. Go to the chat to start talking.</div>
           <div v-else class="manage-messages">
