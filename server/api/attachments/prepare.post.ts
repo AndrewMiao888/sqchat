@@ -4,7 +4,7 @@ import { requireAuth, rateLimit } from '../../utils/auth'
 import { store } from '../../utils/store'
 import { findThread } from '../../utils/chat'
 import { cleanAbandonedUploads } from '../../utils/attachments'
-import { FILE_TYPES, MAX_FILE_SIZE } from '#shared/types/media'
+import { FILE_TYPES, MAX_FILE_SIZE, VOICE_RECORDING_TYPES } from '#shared/types/media'
 export default defineEventHandler(async event => {
   const { user } = await requireAuth(event)
   await rateLimit(`upload:${user.id}`, 30, 3600)
@@ -12,7 +12,10 @@ export default defineEventHandler(async event => {
   const input = await readBody(event)
   const name = typeof input?.name === 'string' ? input.name.normalize('NFKC').replace(/[\x00-\x1f\x7f/\\]/g, '_').slice(0, 120).trim() : ''
   const extension = name.split('.').at(-1)?.toLowerCase() || ''
-  const contentType = FILE_TYPES[extension]
+  const voiceType = input?.voice === true && typeof input?.contentType === 'string' ? input.contentType.split(';')[0].toLowerCase() : ''
+  const contentType = input?.voice === true
+    ? VOICE_RECORDING_TYPES[voiceType] === extension ? voiceType : undefined
+    : FILE_TYPES[extension]
   if (!name || !contentType) throw createError({ statusCode: 400, statusMessage: 'Choose a photo, video, audio file, PDF, document, text file, or ZIP.' })
   if (!Number.isInteger(input.size) || input.size < 1 || input.size > MAX_FILE_SIZE) throw createError({ statusCode: 400, statusMessage: 'Each file must be between 1 byte and 20 MB.' })
   const conversation = typeof input.conversation === 'string' && input.conversation ? input.conversation : null

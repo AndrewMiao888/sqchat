@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TEXT_EFFECTS, BUBBLE_EFFECTS, SCREEN_EFFECTS, FILE_ACCEPT, MAX_ATTACHMENTS, MAX_FILE_SIZE, fileSize, type Attachment, type MessageEffects, type TextEffect, type ScreenEffect } from '#shared/types/media'
+import { TEXT_EFFECTS, BUBBLE_EFFECTS, SCREEN_EFFECTS, FILE_ACCEPT, MAX_ATTACHMENTS, MAX_FILE_SIZE, VOICE_RECORDING_TYPES, fileSize, type Attachment, type MessageEffects, type TextEffect, type ScreenEffect } from '#shared/types/media'
 import type { ChatMessage } from '#shared/types/chat'
 const props = defineProps<{ conversation: string; sender: string; replyTo?: ChatMessage | null }>()
 const emit = defineEmits<{ sent: []; cancelReply: []; preview: [effect: ScreenEffect, text: string] }>()
@@ -13,6 +13,15 @@ const autoScreen = ref(true)
 const previewKey = ref(0)
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const picker = ref<HTMLInputElement | null>(null)
+const recording = ref(false)
+const finishingRecording = ref(false)
+const recordingSeconds = ref(0)
+const MAX_VOICE_SECONDS = 5 * 60
+let recorder: MediaRecorder | null = null
+let mediaStream: MediaStream | null = null
+let recordingTimer: ReturnType<typeof setInterval> | undefined
+let voiceChunks: Blob[] = []
+let discardVoiceRecording = false
 const selection = ref({ start: 0, end: 0 })
 let typingActive = false
 let typingId = ''
@@ -47,8 +56,8 @@ watch([draft, () => uploads.value.length], ([text, files]) => { unsent.value = {
 onBeforeUnmount(() => { if (!recovery.value.failed) unsent.value = { text: '', files: 0 } })
 const uploading = computed(() => uploads.value.some(file => file.status === 'uploading'))
 const ready = computed(() => uploads.value.filter(file => file.status === 'ready'))
-const hasDraft = computed(() => !!draft.value.trim() || !!uploads.value.length)
-const canSend = computed(() => interactive.value && !sending.value && !uploading.value && !uploads.value.some(file => file.status === 'error') && (!!draft.value.trim() || !!ready.value.length))
+const hasDraft = computed(() => !!draft.value.trim() || !!uploads.value.length || recording.value || finishingRecording.value)
+const canSend = computed(() => interactive.value && !sending.value && !uploading.value && !recording.value && !finishingRecording.value && !uploads.value.some(file => file.status === 'error') && (!!draft.value.trim() || !!ready.value.length))
 const previewMessage = computed<ChatMessage>(() => ({ id: 'preview', sender: props.sender, createdAt: new Date().toISOString(), body: draft.value.trim() || 'A little more expression.', effects: effects.value, replyTo: props.replyTo ? { id: props.replyTo.id, sender: props.replyTo.sender, body: props.replyTo.effects?.bubble === 'invisible' ? 'Invisible ink message' : props.replyTo.body.slice(0, 240) || 'Attachment' } : undefined }))
 let pressTimer: ReturnType<typeof setTimeout> | undefined
 let longPressed = false
@@ -68,8 +77,9 @@ function endPress() { clearTimeout(pressTimer) }
 function sendClick() { endPress(); if (longPressed) { longPressed = false; return }; void send() }
 function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); void send() } }
 function textChanged() { effects.value.text = []; captureSelection(); startTyping() }
-async function attach(files: FileList | File[] | null) {
+async function attach(files: FileList | File[] | null, voice = false) {
   if (!files || sending.value || disposed) return
+  if (recording.value || finishingRecording.value) { failure.value = 'Stop recording before adding another attachment.'; return }
   failure.value = ''
   for (const file of Array.from(files)) {
     if (disposed) break
@@ -79,7 +89,7 @@ async function attach(files: FileList | File[] | null) {
     uploads.value.push(entry)
     const local = uploads.value.at(-1)!
     try {
-      const prepared = await api('/api/attachments/prepare', { method: 'POST', body: { name: file.name, size: file.size, conversation: props.conversation } })
+      const prepared = await api('/api/attachments/prepare', { method: 'POST', body: { name: file.name, size: file.size, conversation: props.conversation, ...(voice ? { voice: true, contentType: file.type } : {}) } })
       local.id = prepared.id; local.type = prepared.contentType
       if (local.controller.signal.aborted) { await api(`/api/attachments/${local.id}`, { method: 'DELETE', body: {} }); continue }
       const { put } = await import('@vercel/blob/client')
@@ -91,6 +101,80 @@ async function attach(files: FileList | File[] | null) {
     }
   }
   if (picker.value) picker.value.value = ''
+}
+function recordingTime(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` }
+function stopVoiceRecording(discard = false) {
+  if (discard) discardVoiceRecording = true
+  if (recordingTimer) clearInterval(recordingTimer)
+  recordingTimer = undefined
+  recording.value = false
+  if (recorder && recorder.state !== 'inactive') {
+    finishingRecording.value = true
+    try { recorder.stop() } catch { finishingRecording.value = false }
+  } else {
+    finishingRecording.value = false
+    mediaStream?.getTracks().forEach(track => track.stop())
+    mediaStream = null
+  }
+}
+async function startVoiceRecording() {
+  if (!interactive.value || sending.value || recording.value || finishingRecording.value || uploads.value.length >= MAX_ATTACHMENTS) return
+  failure.value = ''
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    failure.value = 'Voice recording is not supported in this browser.'
+    return
+  }
+  let stream: MediaStream | null = null
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    if (disposed) { stream.getTracks().forEach(track => track.stop()); return }
+    const formats = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/ogg']
+    const mimeType = formats.find(type => MediaRecorder.isTypeSupported(type))
+    if (!mimeType) throw new Error('This browser does not support a compatible voice recording format.')
+    const contentType = mimeType.split(';', 1)[0]?.toLowerCase() || ''
+    const extension = VOICE_RECORDING_TYPES[contentType]
+    if (!extension) throw new Error('This browser does not support a compatible voice recording format.')
+    const activeRecorder = new MediaRecorder(stream, { mimeType })
+    mediaStream = stream
+    recorder = activeRecorder
+    voiceChunks = []
+    discardVoiceRecording = false
+    recordingSeconds.value = 0
+    activeRecorder.ondataavailable = event => { if (event.data.size) voiceChunks.push(event.data) }
+    activeRecorder.onerror = () => { failure.value = 'Recording stopped unexpectedly. Please try again.'; stopVoiceRecording(true) }
+    activeRecorder.onstop = () => {
+      if (recordingTimer) clearInterval(recordingTimer)
+      recordingTimer = undefined
+      recording.value = false
+      finishingRecording.value = false
+      stream?.getTracks().forEach(track => track.stop())
+      if (mediaStream === stream) mediaStream = null
+      if (recorder === activeRecorder) recorder = null
+      const chunks = voiceChunks
+      voiceChunks = []
+      const discard = discardVoiceRecording || disposed
+      discardVoiceRecording = false
+      if (discard) return
+      const blob = new Blob(chunks, { type: contentType })
+      if (!blob.size) { failure.value = 'The recording was empty. Please try again.'; return }
+      if (blob.size > MAX_FILE_SIZE) { failure.value = 'That recording is over 20 MB. Record a shorter voice message.'; return }
+      void attach([new File([blob], `Voice message.${extension}`, { type: contentType })], true)
+    }
+    activeRecorder.start(250)
+    recording.value = true
+    recordingTimer = setInterval(() => {
+      recordingSeconds.value++
+      if (recordingSeconds.value >= MAX_VOICE_SECONDS) stopVoiceRecording()
+    }, 1000)
+  } catch (error: any) {
+    stream?.getTracks().forEach(track => track.stop())
+    if (mediaStream === stream) mediaStream = null
+    if (recorder?.state === 'inactive') recorder = null
+    const name = error?.name
+    failure.value = name === 'NotAllowedError' || name === 'PermissionDeniedError'
+      ? 'Allow microphone access in your browser to record a voice message.'
+      : name === 'NotFoundError' ? 'No microphone was found.' : error?.message || 'Could not start recording.'
+  }
 }
 async function removeUpload(file: Upload) {
   file.controller.abort(); uploads.value = uploads.value.filter(item => item.localId !== file.localId)
@@ -109,15 +193,25 @@ async function send() {
 function allowLeave() { return !hasDraft.value || window.confirm('Discard this unsent message and its attachments?') }
 onBeforeRouteLeave(allowLeave)
 onBeforeRouteUpdate((to, from) => to.query.chat === from.query.chat || allowLeave())
-onBeforeUnmount(() => { disposed = true; endPress(); for (const file of uploads.value) { file.controller.abort(); if (file.id) void api(`/api/attachments/${file.id}`, { method: 'DELETE', body: {} }).catch(() => {}) } })
+onBeforeUnmount(() => {
+  disposed = true; endPress()
+  discardVoiceRecording = true
+  if (recordingTimer) clearInterval(recordingTimer)
+  recordingTimer = undefined
+  try { if (recorder && recorder.state !== 'inactive') recorder.stop() } catch {}
+  mediaStream?.getTracks().forEach(track => track.stop())
+  mediaStream = null
+  voiceChunks = []
+  for (const file of uploads.value) { file.controller.abort(); if (file.id) void api(`/api/attachments/${file.id}`, { method: 'DELETE', body: {} }).catch(() => {}) }
+})
 </script>
 <template>
   <form class="composer rich-composer" @submit.prevent="send" @dragover.prevent @drop.prevent="attach($event.dataTransfer?.files || null)">
     <div class="composer-identity"><span>Sending as <strong>{{ sender }}</strong></span><span class="composer-tip">Enter to send · Hold send for effects</span></div>
     <div v-if="replyTo" class="reply-draft"><UiIcon name="reply" /><div><strong>Replying to {{ replyTo.sender }}</strong><p>{{ replyTo.effects?.bubble === 'invisible' ? 'Invisible ink message' : replyTo.body.slice(0, 160) || 'Attachment' }}</p></div><button class="plain-button" type="button" aria-label="Cancel reply" @click="emit('cancelReply')"><UiIcon name="close" /></button></div>
-    <div v-if="uploads.length" class="upload-tray"><div v-for="file in uploads" :key="file.localId" class="upload-item"><UiIcon :name="file.type.startsWith('image/') ? 'image' : 'file'" /><div><strong>{{ file.name }}</strong><small>{{ file.status === 'uploading' ? `Uploading ${file.progress}%` : file.status === 'error' ? file.error : fileSize(file.size) + ' / Ready' }}</small><progress v-if="file.status === 'uploading'" :value="file.progress" max="100"></progress></div><button type="button" :aria-label="`Remove ${file.name}`" @click="removeUpload(file)"><UiIcon name="close" /></button></div></div>
+    <div v-if="uploads.length" class="upload-tray"><div v-for="file in uploads" :key="file.localId" class="upload-item"><UiIcon :name="file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'sound' : 'file'" /><div><strong>{{ file.name }}</strong><small>{{ file.status === 'uploading' ? `Uploading ${file.progress}%` : file.status === 'error' ? file.error : fileSize(file.size) + ' / Ready' }}</small><progress v-if="file.status === 'uploading'" :value="file.progress" max="100"></progress></div><button type="button" :aria-label="`Remove ${file.name}`" @click="removeUpload(file)"><UiIcon name="close" /></button></div></div>
     <div class="composer-box"><textarea ref="textarea" v-model="draft" aria-label="Your message" placeholder="Write a message or drop a file..." rows="2" maxlength="1000" :disabled="!interactive || sending" @keydown="keydown" @select="captureSelection" @keyup="captureSelection" @mouseup="captureSelection" @input="textChanged" @focus="startTyping" @blur="stopTyping" @paste="event => { if (event.clipboardData?.files.length) { event.preventDefault(); attach(event.clipboardData.files) } }"></textarea><button class="send-button" type="button" :disabled="!canSend" :aria-label="sending ? 'Sending message' : 'Send message. Hold for effects.'" @click="sendClick" @pointerdown="startPress" @pointerup="endPress" @pointercancel="endPress" @pointerleave="endPress" @contextmenu.prevent="effectOpen = true; effectTab = 'bubble'"><UiIcon name="arrow-up" /></button></div>
-    <div class="composer-tools"><input ref="picker" type="file" multiple :accept="FILE_ACCEPT" hidden @change="attach(($event.target as HTMLInputElement).files)"><button class="plain-button" type="button" :disabled="!interactive || sending || uploads.length >= MAX_ATTACHMENTS" @click="picker?.click()"><UiIcon name="paperclip" /> Attach</button><button class="plain-button" type="button" :disabled="!interactive" :aria-expanded="effectOpen" @click="effectOpen = !effectOpen"><SparkIcon /> Effects<span v-if="effects.text?.length || effects.bubble || effects.screen" class="effect-active-dot"></span></button><span class="composer-limit">{{ draft.length }}/1000 · 20 MB per file</span></div>
+    <div class="composer-tools"><input ref="picker" type="file" multiple :accept="FILE_ACCEPT" hidden @change="attach(($event.target as HTMLInputElement).files)"><button class="plain-button" type="button" :disabled="!interactive || sending || recording || finishingRecording || uploads.length >= MAX_ATTACHMENTS" @click="picker?.click()"><UiIcon name="paperclip" /> Attach</button><button class="plain-button voice-record-button" :class="{ recording }" type="button" :disabled="!interactive || sending || finishingRecording || (!recording && uploads.length >= MAX_ATTACHMENTS)" :aria-label="recording ? 'Stop voice recording' : 'Record a voice message'" @click="recording ? stopVoiceRecording() : startVoiceRecording()"><UiIcon :name="recording ? 'stop' : 'mic'" />{{ recording ? 'Stop recording' : finishingRecording ? 'Finishing…' : 'Record voice' }}</button><span v-if="recording" class="voice-recording-status" role="status">Recording {{ recordingTime(recordingSeconds) }} / 5:00</span><button class="plain-button" type="button" :disabled="!interactive" :aria-expanded="effectOpen" @click="effectOpen = !effectOpen"><SparkIcon /> Effects<span v-if="effects.text?.length || effects.bubble || effects.screen" class="effect-active-dot"></span></button><span class="composer-limit">{{ draft.length }}/1000 · 20 MB per file</span></div>
     <div v-if="effectOpen" class="effects-panel"><div class="effects-panel-heading"><strong>Send with a little more expression</strong><button class="plain-button" type="button" aria-label="Close effects" @click="effectOpen = false"><UiIcon name="close" /></button></div><div class="effect-tabs" role="group" aria-label="Effect category"><button v-for="tab in (['text','bubble','screen'] as const)" :key="tab" type="button" :class="{ active: effectTab === tab }" :aria-pressed="effectTab === tab" @click="effectTab = tab">{{ tab }}</button></div>
       <template v-if="effectTab === 'text'"><p class="field-help">Select words in your message first, or apply an effect to all text. Editing your message clears its word effects.</p><div class="effect-options"><button v-for="effect in TEXT_EFFECTS" :key="effect" type="button" :disabled="!draft.trim()" @click="addTextEffect(effect)">{{ effect }}</button></div></template>
       <div v-else-if="effectTab === 'bubble'" class="effect-options"><button v-for="effect in BUBBLE_EFFECTS" :key="effect" type="button" :class="{ active: effects.bubble === effect }" :aria-pressed="effects.bubble === effect" @click="effects.bubble = effect; previewKey++">{{ effect === 'invisible' ? 'Invisible ink' : effect }}</button><button type="button" @click="delete effects.bubble; previewKey++">None</button></div>
@@ -127,3 +221,9 @@ onBeforeUnmount(() => { disposed = true; endPress(); for (const file of uploads.
     <p v-if="failure" class="form-error" role="alert">{{ failure }}</p>
   </form>
 </template>
+
+<style scoped>
+.voice-record-button.recording { color: #bd6257; }
+.voice-record-button:disabled { opacity: .5; cursor: not-allowed; }
+.voice-recording-status { color: #bd6257; font-size: 10px; font-weight: 700; }
+</style>

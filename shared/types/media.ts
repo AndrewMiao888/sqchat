@@ -12,6 +12,7 @@ export interface MessageEffects {
 export interface Attachment { id: string; name: string; type: string; size: number }
 export const MAX_FILE_SIZE = 20 * 1024 * 1024
 export const MAX_ATTACHMENTS = 4
+export const VOICE_RECORDING_TYPES: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg' }
 export const FILE_TYPES: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif',
   mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', m4v: 'video/mp4',
