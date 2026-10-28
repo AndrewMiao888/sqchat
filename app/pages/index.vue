@@ -104,7 +104,25 @@ const typingText = computed(() => {
   if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`
   return `${names.length} people are typing...`
 })
-async function refreshPresence() {
+// Overlapping calls for the same conversation share one follow-up run instead of each refetching.
+function coalesce(run: () => Promise<void>) {
+  let running: { key: string; done: Promise<void> } | undefined
+  let queued: { key: string; done: Promise<void> } | undefined
+  const start = (key: string) => {
+    const done = run().finally(() => { if (running?.done === done) running = undefined })
+    running = { key, done }
+    return done
+  }
+  return () => {
+    const key = conversationKey()
+    if (queued?.key === key) return queued.done
+    if (running?.key !== key) return start(key)
+    const done = running.done.catch(() => {}).then(() => { if (queued?.done === done) queued = undefined; return start(conversationKey()) })
+    queued = { key, done }
+    return done
+  }
+}
+const refreshPresence = coalesce(async () => {
   const target = conversation.value
   try {
     const next = await api<PresenceState>('/api/presence', { query: { conversation: target } })
@@ -112,7 +130,7 @@ async function refreshPresence() {
   } catch {
     if (target === conversation.value) { presence.value = { members: [] }; presenceReady.value = true }
   }
-}
+})
 function conversationKey(value: string | null | undefined = conversation.value) { return value || 'shared' }
 function hasUnread(value: string | null | undefined) { return !!unreadConversations.value[conversationKey(value)] }
 function clearUnread(value: string | null | undefined = conversation.value) {
@@ -127,12 +145,12 @@ const { connection } = useChatEvents(payload => {
 }, payload => {
   if (!payload || payload.online || !('conversation' in payload) || conversationKey(payload.conversation) === conversationKey()) void refreshPresence()
 })
-async function refreshLive() {
+const refreshLive = coalesce(async () => {
   const target = conversation.value
   await refresh()
   const updated = await Promise.all(history.value.map(async page => ({ cursor: page.cursor, data: await api<ChatState>('/api/state', { query: { conversation: target, before: page.cursor } }) })))
   if (target === conversation.value) history.value = updated
-}
+})
 async function loadOlder() {
   const cursor = historyEnd.value.nextCursor
   if (!cursor || historyLoading.value) return

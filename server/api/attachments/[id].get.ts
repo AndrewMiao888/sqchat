@@ -20,7 +20,8 @@ export default defineEventHandler(async event => {
   setHeaders(event, {
     'Content-Type': inline ? file.content_type : 'application/octet-stream',
     'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="download.${file.name.split('.').at(-1)?.replace(/[^a-zA-Z0-9]/g, '') || 'bin'}"; filename*=UTF-8''${encodeURIComponent(file.name).replace(/['()*]/g, c => '%' + c.charCodeAt(0).toString(16))}`,
-    'Cache-Control': 'private, no-store', 'Accept-Ranges': 'bytes',
+    // Each attachment id always serves the same bytes, so the browser can keep its copy.
+    'Cache-Control': 'private, max-age=31536000, immutable', 'Accept-Ranges': 'bytes',
     'Content-Security-Policy': "default-src 'none'; sandbox"
   })
   const contentRange = result.headers.get('content-range')

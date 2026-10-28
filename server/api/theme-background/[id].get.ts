@@ -17,6 +17,6 @@ export default defineEventHandler(async event => {
   } else await findThread(user, file.conversation_key)
   const result = await get(file.blob_path, { access: 'private' })
   if (!result || result.statusCode !== 200) throw createError({ statusCode: 404, statusMessage: 'Background picture not found.' })
-  setHeaders(event, { 'Content-Type': file.content_type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" })
+  setHeaders(event, { 'Content-Type': file.content_type, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" })
   return sendStream(event, result.stream)
 })
