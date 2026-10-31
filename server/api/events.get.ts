@@ -1,6 +1,6 @@
 import { Client } from 'pg'
 import { createEventStream } from 'h3'
-import { requireAuth, sessionForHash, rateLimit } from '../utils/auth'
+import { requireAuth, sessionForHash, sessionRows, rateLimit } from '../utils/auth'
 import { store } from '../utils/store'
 import { randomUUID } from 'node:crypto'
 
@@ -69,8 +69,17 @@ export default defineEventHandler(async event => {
     if (checking) return
     checking = true
     try {
-      await db`UPDATE sq_streams SET expires_at = NOW() + INTERVAL '40 seconds' WHERE id = ${lease}`
-      await check('heartbeat')
+      // One database request renews the lease and rechecks the session.
+      const [, session] = await db.transaction([
+        db`UPDATE sq_streams SET expires_at = NOW() + INTERVAL '40 seconds' WHERE id = ${lease}`,
+        sessionRows(db, auth.hash)
+      ])
+      if (!closed) {
+        if (!session?.length) {
+          await push('expired')
+          await stream.close()
+        } else await push('heartbeat')
+      }
     } catch { await stream.close().catch(() => {}) }
     checking = false
   }, 15000)

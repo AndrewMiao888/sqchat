@@ -17,11 +17,14 @@ export function publicAccount(row: any): Account {
     canModerateMessages: row.role === 'admin' || !!row.message_moderator }
 }
 
-export async function sessionForHash(hash: string, touch = false): Promise<AuthSession | null> {
-  const db = await store()
-  const rows = await db`SELECT u.*, s.csrf FROM sq_sessions s JOIN sq_users u ON u.id = s.user_id
+// Kept separate so callers can batch the session check with other statements in one request.
+export const sessionRows = (db: Awaited<ReturnType<typeof store>>, hash: string) => db`SELECT u.*, s.csrf FROM sq_sessions s JOIN sq_users u ON u.id = s.user_id
     WHERE s.token_hash = ${hash} AND s.expires_at > NOW() AND s.last_seen > NOW() - INTERVAL '365 days'
       AND u.status = 'active' AND s.session_version = u.session_version`
+
+export async function sessionForHash(hash: string, touch = false): Promise<AuthSession | null> {
+  const db = await store()
+  const rows = await sessionRows(db, hash)
   if (!rows[0]) return null
   if (touch) await db`UPDATE sq_sessions SET last_seen = NOW(), expires_at = NOW() + INTERVAL '365 days'
     WHERE token_hash = ${hash} AND last_seen < NOW() - INTERVAL '1 minute'`
