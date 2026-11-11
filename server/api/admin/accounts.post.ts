@@ -26,6 +26,11 @@ export default defineEventHandler(async event => {
       if (target.status !== 'active') throw createError({ statusCode: 409, statusMessage: 'This account must finish setup first.' })
       await db`UPDATE sq_users SET message_moderator = ${input.action === 'allow-moderation'} WHERE id = ${target.id}`
       break
+    case 'allow-game':
+    case 'block-game':
+      if (target.status !== 'active') throw createError({ statusCode: 409, statusMessage: 'This account must finish setup first.' })
+      await db`UPDATE sq_users SET game_access = ${input.action === 'allow-game'} WHERE id = ${target.id}`
+      break
     case 'allow-shared':
     case 'block-shared':
       await db`UPDATE sq_users SET private_only = ${input.action === 'block-shared'} WHERE id = ${target.id}`

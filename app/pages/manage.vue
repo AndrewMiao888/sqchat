@@ -103,7 +103,7 @@ useHead({ title: 'Manage chat / SQ Chat' })
 
 <template>
   <div class="site-shell manage-shell" :class="`bubble-${form.bubbleStyle}`" :style="themeStyle">
-    <header class="topbar"><BrandLogo /><span class="topbar-caption">{{ canEditRoom ? 'Room editor' : 'Message moderation' }}</span><NuxtLink to="/" class="topbar-link"><UiIcon name="arrow-left" /> Back to chat</NuxtLink></header>
+    <header class="topbar"><BrandLogo /><span class="topbar-caption">{{ canEditRoom ? 'Room editor' : 'Message moderation' }}</span><nav class="topbar-actions"><NuxtLink v-if="auth.user?.canPlayGame" to="/game" class="topbar-link"><UiIcon name="gamepad" /> Game</NuxtLink><NuxtLink to="/" class="topbar-link"><UiIcon name="arrow-left" /> Back to chat</NuxtLink></nav></header>
     <main class="manage-main">
       <div class="manage-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> {{ canEditRoom ? 'ROOM SETTINGS' : 'MESSAGE MODERATION' }}</div><h1>{{ canEditRoom ? 'Make this space yours.' : 'Keep the conversation welcoming.' }}</h1><p>{{ manageIntro }}</p></div><div class="manage-pills"><span class="live-badge" :class="{ reconnecting: connection !== 'live' }"><span class="live-dot"></span>{{ connection === 'live' ? 'Live sync' : 'Connecting…' }}</span><span class="public-pill">{{ isAdmin ? 'Administrator' : canEditRoom && canModerate ? 'Room editor and moderator' : canModerate ? 'Moderator' : 'Room editor' }}</span></div></div>
       <p class="public-explainer">{{ accessSummary }}</p>

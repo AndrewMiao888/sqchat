@@ -11,6 +11,7 @@ export interface Account {
   canChangePassword: boolean
   canEditCms: boolean
   canModerateMessages: boolean
+  canPlayGame: boolean
 }
 export interface AuthState { user: Account | null; csrf: string }
 export interface Conversation {

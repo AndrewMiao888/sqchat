@@ -14,7 +14,8 @@ export function publicAccount(row: any): Account {
     privateOnly: !!row.private_only, homeConversation: row.home_thread || null, lastConversation: row.last_chat ?? null, chatSort: row.chat_sort === 'contributed' ? 'contributed' : 'viewed',
     canChangePassword: row.role === 'admin' || !!(row.password_change_until && new Date(row.password_change_until).getTime() > Date.now()),
     canEditCms: row.role === 'admin' || !!row.cms_editor,
-    canModerateMessages: row.role === 'admin' || !!row.message_moderator }
+    canModerateMessages: row.role === 'admin' || !!row.message_moderator,
+    canPlayGame: row.role === 'admin' || !!row.game_access }
 }
 
 // Kept separate so callers can batch the session check with other statements in one request.

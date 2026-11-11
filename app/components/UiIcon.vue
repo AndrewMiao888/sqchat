@@ -1,5 +1,5 @@
 <script setup lang="ts">
-type IconName = 'bell' | 'arrow-up-right' | 'arrow-left' | 'arrow-up' | 'arrow-right' | 'check' | 'plus' | 'rotate' | 'trash' | 'lock' | 'shield' | 'users' | 'user' | 'settings' | 'copy' | 'paperclip' | 'file' | 'image' | 'download' | 'share' | 'close' | 'eye' | 'sound' | 'muted' | 'play' | 'reply' | 'edit' | 'mic' | 'stop'
+type IconName = 'bell' | 'arrow-up-right' | 'arrow-left' | 'arrow-up' | 'arrow-right' | 'check' | 'plus' | 'rotate' | 'trash' | 'lock' | 'shield' | 'users' | 'user' | 'settings' | 'copy' | 'paperclip' | 'file' | 'image' | 'download' | 'share' | 'close' | 'eye' | 'sound' | 'muted' | 'play' | 'reply' | 'edit' | 'mic' | 'stop' | 'gamepad' | 'trophy' | 'zap'
 defineProps<{ name: IconName }>()
 
 const paths: Record<IconName, string[]> = {
@@ -31,7 +31,10 @@ const paths: Record<IconName, string[]> = {
   muted: ['M3 9h4l5-5v16l-5-5H3z', 'm17 9 5 6', 'm17 15 5-6'],
   play: ['m8 4 12 8-12 8z'],
   mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3', 'M8 22h8'],
-  stop: ['M6 6h12v12H6z']
+  stop: ['M6 6h12v12H6z'],
+  gamepad: ['M6 12h4', 'M8 10v4', 'M15 13h.01', 'M18 11h.01', 'M7 7h10a5 5 0 0 1 4.7 3.3l1.1 4.5a3 3 0 0 1-5.2 2.6L16 15H8l-1.6 2.4a3 3 0 0 1-5.2-2.6l1.1-4.5A5 5 0 0 1 7 7Z'],
+  trophy: ['M8 21h8', 'M12 17v4', 'M7 4h10v5a5 5 0 0 1-10 0Z', 'M5 5H3v2a4 4 0 0 0 4 4', 'M19 5h2v2a4 4 0 0 1-4 4'],
+  zap: ['M13 2 4 14h-7l1 8-9-16h7z']
 }
 </script>
 

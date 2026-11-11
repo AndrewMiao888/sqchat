@@ -81,6 +81,7 @@ export async function store() {
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_auto_approve BOOLEAN NOT NULL DEFAULT FALSE`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS cms_editor BOOLEAN NOT NULL DEFAULT FALSE`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS message_moderator BOOLEAN NOT NULL DEFAULT FALSE`
+    await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS game_access BOOLEAN NOT NULL DEFAULT FALSE`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS last_chat TEXT`
     await db`ALTER TABLE sq_users ADD COLUMN IF NOT EXISTS chat_sort TEXT NOT NULL DEFAULT 'viewed' CHECK (chat_sort IN ('viewed','contributed'))`
     await db`CREATE TABLE IF NOT EXISTS sq_thread_views (user_id TEXT NOT NULL REFERENCES sq_users(id) ON DELETE CASCADE, thread_id TEXT NOT NULL REFERENCES sq_threads(id) ON DELETE CASCADE, last_viewed TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (user_id, thread_id))`
@@ -143,6 +144,31 @@ export async function store() {
         VALUES (${randomUUID()}, ${name}, ${name.toLowerCase()}, ${name === 'Andrew' ? 'admin' : 'member'}, TRUE)
         ON CONFLICT (name_key) DO NOTHING`
     }
+    const gameDefaults = await db`INSERT INTO sq_config (key, value) VALUES ('game_default_access_seeded', '1') ON CONFLICT (key) DO NOTHING RETURNING key`
+    if (gameDefaults.length) await db`UPDATE sq_users SET game_access = TRUE WHERE name_key IN ('andrew','darius','harrison')`
+    await db`CREATE TABLE IF NOT EXISTS sq_game_profiles (
+      user_id TEXT PRIMARY KEY REFERENCES sq_users(id) ON DELETE CASCADE,
+      level INTEGER NOT NULL DEFAULT 1,
+      xp INTEGER NOT NULL DEFAULT 0,
+      coins INTEGER NOT NULL DEFAULT 0,
+      best_distance INTEGER NOT NULL DEFAULT 0,
+      max_combo INTEGER NOT NULL DEFAULT 0,
+      boosters JSONB NOT NULL DEFAULT '{}'::jsonb,
+      upgrades JSONB NOT NULL DEFAULT '{}'::jsonb,
+      promo_code_used BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`
+    await db`CREATE TABLE IF NOT EXISTS sq_game_races (
+      user_id TEXT PRIMARY KEY REFERENCES sq_users(id) ON DELETE CASCADE,
+      seed TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      distance INTEGER NOT NULL DEFAULT 0,
+      score INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'racing' CHECK (status IN ('racing','finished','crashed')),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`
+    await db`CREATE INDEX IF NOT EXISTS sq_game_races_seed ON sq_game_races(seed, updated_at DESC)`
     await db`INSERT INTO sq_users (id, name, name_key)
       SELECT 'legacy-' || name_key, name, name_key FROM chat_people
       ON CONFLICT (name_key) DO NOTHING`
