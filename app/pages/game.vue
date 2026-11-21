@@ -4,6 +4,7 @@ import type { GameBoosterId, GameState, GameUpgradeId } from '#shared/types/game
 definePageMeta({ middleware: 'auth' })
 
 type TrackPoint = { x: number; y: number }
+type TrackPalette = { name: string; grass: string; road: string; edge: string; stripe: string; coin: string }
 type DriftRun = {
   status: 'ready' | 'running' | 'finished' | 'crashed'
   runId: string
@@ -21,6 +22,20 @@ type DriftRun = {
   message: string
 }
 
+const trackPalettes: TrackPalette[] = [
+  { name: 'Emerald Run', grass: '#183b35', road: '#67a98c', edge: '#f0d99b', stripe: '#e57c62', coin: '#ffe28a' },
+  { name: 'Sunset Loop', grass: '#4b2b32', road: '#d98769', edge: '#ffe0a6', stripe: '#733d4d', coin: '#fff0a5' },
+  { name: 'Blue Hour', grass: '#1e3550', road: '#679fc0', edge: '#d9eff5', stripe: '#e68d72', coin: '#fff0a5' },
+  { name: 'Neon Garden', grass: '#263b32', road: '#94aa69', edge: '#f0e2a2', stripe: '#dc7695', coin: '#fff2a1' },
+  { name: 'Purple Haze', grass: '#382b4b', road: '#997cb7', edge: '#f1d8a8', stripe: '#e48677', coin: '#fff0a5' },
+  { name: 'Coastal Dash', grass: '#28505a', road: '#70b7ad', edge: '#f2e3bc', stripe: '#ed8f6e', coin: '#fff0a5' }
+]
+const cars = [
+  { id: 'comet', name: 'Comet', color: '#f0785f' },
+  { id: 'circuit', name: 'Circuit', color: '#65c8c0' },
+  { id: 'sunbeam', name: 'Sunbeam', color: '#f2c65d' },
+  { id: 'midnight', name: 'Midnight', color: '#9e91e5' }
+] as const
 const boosterIds: GameBoosterId[] = ['shield', 'magnet', 'overdrive', 'ghost']
 const upgradeIds: GameUpgradeId[] = ['grip', 'turbo', 'magnet', 'shield']
 const blankGameState = (): GameState => ({
@@ -55,6 +70,8 @@ const failure = ref('')
 const busyShop = ref('')
 const claiming = ref(false)
 const track = ref<TrackPoint[]>([])
+const trackWidths = ref<number[]>([])
+const selectedCar = ref<(typeof cars)[number]['id']>('comet')
 const coins = ref<Set<number>>(new Set())
 const usedBoosters = ref<Record<GameBoosterId, number>>({ shield: 0, magnet: 0, overdrive: 0, ghost: 0 })
 const pressed = ref(false)
@@ -83,6 +100,8 @@ const keyDown = (event: KeyboardEvent) => onKey(event, true)
 const keyUp = (event: KeyboardEvent) => onKey(event, false)
 
 const profile = computed(() => data.value.profile)
+const trackPalette = computed(() => trackPalettes[(selectedLevel.value - 1) % trackPalettes.length]!)
+const selectedCarColor = computed(() => cars.find(car => car.id === selectedCar.value)?.color || cars[0].color)
 const canStart = computed(() => !error.value && run.status !== 'running')
 const levelOptions = computed(() => Array.from({ length: Math.max(1, profile.value.level) }, (_, index) => index + 1))
 const levelProgress = computed(() => Math.min(100, Math.round((profile.value.level / data.value.maxLevel) * 100)))
@@ -112,24 +131,29 @@ function randomFrom(seed: string) {
   }
 }
 
-function generateTrack(seed: string) {
-  const random = randomFrom(seed)
+function generateTrack(seed: string, level: number) {
+  const random = randomFrom(`${seed}:${level}`)
   const points: TrackPoint[] = [{ x: 0, y: 0 }]
   const dirs: TrackPoint[] = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }]
+  const widths = [0.46]
+  const segmentCount = 110 + level * 6
+  const maxStraight = Math.max(2, 5 - Math.floor((level - 1) / 15))
   let direction = 0
   let straight = 2
-  for (let index = 0; index < 520; index++) {
+  for (let index = 0; index < segmentCount; index++) {
     if (straight <= 0) {
       const roll = random()
       direction = (direction + (roll < 0.46 ? 1 : roll < 0.92 ? 3 : 0)) % 4
-      straight = 2 + Math.floor(random() * 4)
+      straight = 2 + Math.floor(random() * (maxStraight - 1))
     }
     const last = points.at(-1)!
     const dir = dirs[direction] || dirs[0]!
     points.push({ x: last.x + dir.x, y: last.y + dir.y })
+    const levelWidth = 0.46 - Math.min(0.08, (level - 1) * 0.0016)
+    widths.push(Math.max(0.32, levelWidth + (random() - 0.5) * 0.1))
     straight--
   }
-  return points
+  return { points, widths }
 }
 
 function segmentDirection(index: number) {
@@ -179,6 +203,54 @@ function drawDiamond(ctx: CanvasRenderingContext2D, x: number, y: number, radius
   ctx.stroke()
 }
 
+function drawCar(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, color: string, glow?: string) {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.rotate(angle)
+  if (glow) {
+    ctx.shadowColor = glow
+    ctx.shadowBlur = 18
+  }
+  ctx.fillStyle = '#11191e'
+  ctx.beginPath()
+  ctx.ellipse(0, 8, 15, 21, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.shadowBlur = 0
+  ctx.fillStyle = '#10171b'
+  ctx.fillRect(-13, -12, 5, 12)
+  ctx.fillRect(8, -12, 5, 12)
+  ctx.fillRect(-13, 8, 5, 12)
+  ctx.fillRect(8, 8, 5, 12)
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.moveTo(0, -21)
+  ctx.lineTo(10, -14)
+  ctx.lineTo(13, 9)
+  ctx.lineTo(9, 19)
+  ctx.lineTo(-9, 19)
+  ctx.lineTo(-13, 9)
+  ctx.lineTo(-10, -14)
+  ctx.closePath()
+  ctx.fill()
+  ctx.strokeStyle = '#ffffff88'
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+  ctx.fillStyle = '#c9e6e9'
+  ctx.beginPath()
+  ctx.moveTo(-7, -11)
+  ctx.lineTo(7, -11)
+  ctx.lineTo(8, -2)
+  ctx.lineTo(-8, -2)
+  ctx.closePath()
+  ctx.fill()
+  ctx.fillStyle = '#293941'
+  ctx.fillRect(-7, 2, 14, 6)
+  ctx.fillStyle = '#ffe5a0'
+  ctx.fillRect(-8, -19, 4, 2)
+  ctx.fillRect(4, -19, 4, 2)
+  ctx.restore()
+}
+
 function draw() {
   const element = canvas.value
   const context = element?.getContext('2d')
@@ -192,9 +264,8 @@ function draw() {
   context.setTransform(scale, 0, 0, scale, 0, 0)
   context.clearRect(0, 0, rect.width, rect.height)
   const gradient = context.createLinearGradient(0, 0, rect.width, rect.height)
-  gradient.addColorStop(0, '#0d1820')
-  gradient.addColorStop(0.52, '#24313a')
-  gradient.addColorStop(1, '#4d4036')
+  gradient.addColorStop(0, trackPalette.value.grass)
+  gradient.addColorStop(1, '#111d25')
   context.fillStyle = gradient
   context.fillRect(0, 0, rect.width, rect.height)
   const car = carPosition()
@@ -204,11 +275,14 @@ function draw() {
     const point = track.value[index]
     if (!point) continue
     const screen = worldToScreen(point, car, rect.width, rect.height)
-    drawDiamond(context, screen.x, screen.y, 45, index % 5 === 0 ? '#52616b' : '#647480')
+    const width = trackWidths.value[index] || 0.44
+    const tileRadius = width * 102
+    drawDiamond(context, screen.x, screen.y, tileRadius, trackPalette.value.edge, '#17242b')
+    drawDiamond(context, screen.x, screen.y, tileRadius - 5, index % 10 < 2 ? trackPalette.value.stripe : trackPalette.value.road, '#ffffff30')
     if (index > run.segment && index % 3 === 1 && !coins.value.has(index)) {
       context.beginPath()
       context.arc(screen.x, screen.y - 6, 7, 0, Math.PI * 2)
-      context.fillStyle = '#f6c85f'
+      context.fillStyle = trackPalette.value.coin
       context.fill()
       context.strokeStyle = '#fff2b3'
       context.lineWidth = 2
@@ -219,30 +293,14 @@ function draw() {
     if (racer.userId === auth.value.user?.id || racer.status !== 'racing') continue
     const offset = Math.max(-8, Math.min(24, (racer.distance - run.distance) / 64))
     const marker = worldToScreen({ x: car.x, y: car.y - offset }, car, rect.width, rect.height)
-    context.fillStyle = '#f0785f'
-    context.beginPath()
-    context.arc(marker.x + 32, marker.y - 26, 8, 0, Math.PI * 2)
-    context.fill()
+    drawCar(context, marker.x + 32, marker.y - 26, 0, '#f0785f')
     context.fillStyle = '#fff'
     context.font = '700 10px DM Sans, sans-serif'
     context.fillText(racer.name.slice(0, 10), marker.x + 44, marker.y - 22)
   }
-  context.save()
-  context.translate(rect.width / 2, rect.height * 0.54)
   const angle = Math.atan2(car.dir.y, car.dir.x) + Math.PI / 2
-  context.rotate(angle)
-  context.fillStyle = run.ghostTime > 0 ? '#d3f5ff' : run.shield > 0 ? '#9bd4ff' : '#f5f1e8'
-  context.strokeStyle = '#1b252c'
-  context.lineWidth = 3
-  context.beginPath()
-  context.moveTo(0, -22)
-  context.lineTo(15, 19)
-  context.lineTo(0, 12)
-  context.lineTo(-15, 19)
-  context.closePath()
-  context.fill()
-  context.stroke()
-  context.restore()
+  const glow = run.ghostTime > 0 ? '#d3f5ff' : run.shield > 0 ? '#9bd4ff' : undefined
+  drawCar(context, rect.width / 2, rect.height * 0.54, angle, selectedCarColor.value, glow)
 }
 
 function finish(crashed: boolean) {
@@ -298,7 +356,7 @@ function step(now: number) {
     run.progress = Math.max(0, projected.progress - 1)
     run.lateral = projected.lateral
   }
-  const roadLimit = 0.44 + upgrades.grip * 0.018
+  const roadLimit = (trackWidths.value[run.segment] || 0.44) + upgrades.grip * 0.018
   if (Math.abs(run.lateral) > roadLimit) crashOrShield()
   const coinIndex = run.segment + 1
   const magnetRadius = usedBoosters.value.magnet ? 0.55 + upgrades.magnet * 0.04 : 0.22 + upgrades.magnet * 0.02
@@ -330,8 +388,10 @@ async function startRace() {
     overdrive: selected.includes('overdrive') ? 1 : 0,
     ghost: selected.includes('ghost') ? 1 : 0
   }
-  const started = await api<{ runId: string; seed: string }>('/api/game/race', { method: 'POST', body: { action: 'start' } })
-  track.value = generateTrack(started.seed)
+  const started = await api<{ runId: string; seed: string }>('/api/game/race', { method: 'POST', body: { action: 'start', level: selectedLevel.value } })
+  const generated = generateTrack(started.seed, selectedLevel.value)
+  track.value = generated.points
+  trackWidths.value = generated.widths
   coins.value = new Set()
   Object.assign(run, {
     status: 'running',
@@ -403,7 +463,9 @@ function onKey(event: KeyboardEvent, value: boolean) {
 }
 
 onMounted(() => {
-  track.value = generateTrack(data.value.seed || 'sq-drift')
+  const generated = generateTrack(data.value.seed || 'sq-drift', selectedLevel.value)
+  track.value = generated.points
+  trackWidths.value = generated.widths
   draw()
   window.addEventListener('keydown', keyDown)
   window.addEventListener('keyup', keyUp)
@@ -433,12 +495,13 @@ useHead({ title: 'SQ Drift / SQ Chat' })
           <div><strong>{{ Math.floor(run.score) }}</strong><span>Score</span></div>
           <div><strong>{{ run.coins }}</strong><span>Coins</span></div>
           <div><strong>{{ run.bestCombo }}x</strong><span>Combo</span></div>
+          <div><strong>{{ track.length ? Math.min(100, Math.floor(run.segment / (track.length - 1) * 100)) : 0 }}%</strong><span>Course</span></div>
         </div>
         <canvas ref="canvas" class="drift-canvas" aria-label="SQ Drift race track"></canvas>
         <div class="race-controls">
           <button class="primary-button race-start" :disabled="!canStart" @click="startRace"><UiIcon :name="run.status === 'running' ? 'zap' : 'play'" /> {{ run.status === 'running' ? 'Racing' : 'Start race' }}</button>
           <button v-if="run.status === 'running'" class="restore-button" @click="finish(false)">Finish</button>
-          <span class="race-status">{{ run.message }}</span>
+          <span class="race-status">{{ trackPalette.name }} · {{ run.message }}</span>
         </div>
       </section>
       <aside class="game-sidebar">
@@ -446,6 +509,15 @@ useHead({ title: 'SQ Drift / SQ Chat' })
           <div class="game-panel-title"><span><UiIcon name="trophy" /></span><div><h1>Level {{ profile.level }}</h1><p>{{ profile.coins }} coins / best {{ profile.bestDistance }}m</p></div></div>
           <div class="level-meter"><span :style="{ width: levelProgress + '%' }"></span></div>
           <label class="game-select">Race level<select v-model.number="selectedLevel" :disabled="run.status === 'running'"><option v-for="level in levelOptions" :key="level" :value="level">Level {{ level }}</option></select></label>
+        </section>
+
+        <section class="game-panel">
+          <div class="section-heading"><span>Garage</span><span class="section-hint">{{ cars.find(car => car.id === selectedCar)?.name }}</span></div>
+          <div class="car-grid">
+            <button v-for="car in cars" :key="car.id" class="car-button" :class="{ active: selectedCar === car.id }" :disabled="run.status === 'running'" :aria-label="`${car.name} car`" :aria-pressed="selectedCar === car.id" @click="selectedCar = car.id">
+              <span class="car-swatch" :style="{ '--car-color': car.color }"></span><strong>{{ car.name }}</strong>
+            </button>
+          </div>
         </section>
 
         <section class="game-panel">

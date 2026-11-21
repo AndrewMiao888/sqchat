@@ -5,7 +5,7 @@
 .game-page .topbar-link { color: #f5f1e8; }
 .game-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; max-width: 1320px; margin: 28px auto 0; align-items: start; }
 .game-stage { position: sticky; top: 18px; min-height: calc(100vh - 132px); border: 1px solid #31414b; background: #0d1820; overflow: hidden; display: grid; grid-template-rows: auto minmax(420px, 1fr) auto; }
-.game-hud { z-index: 2; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: #31414b; border-bottom: 1px solid #31414b; }
+.game-hud { z-index: 2; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: #31414b; border-bottom: 1px solid #31414b; }
 .game-hud div { min-width: 0; padding: 14px 16px; background: #17232b; }
 .game-hud strong { display: block; font-size: clamp(18px, 3vw, 29px); line-height: 1; }
 .game-hud span { display: block; margin-top: 5px; color: #9fb0b9; font-size: 11px; font-weight: 800; text-transform: uppercase; }
@@ -28,6 +28,12 @@
 .booster-button { min-height: 74px; border: 1px solid #d8d0bf; background: #fffdf6; color: #1e2529; text-align: left; padding: 10px; }
 .booster-button.active { border-color: #d45c48; box-shadow: inset 0 0 0 2px #d45c48; }
 .booster-button:disabled { opacity: .52; cursor: not-allowed; }
+.car-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.car-button { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 48px; border: 1px solid #d8d0bf; background: #fffdf6; color: #1e2529; text-align: left; padding: 8px; }
+.car-button.active { border-color: #d45c48; box-shadow: inset 0 0 0 2px #d45c48; }
+.car-button:disabled { cursor: not-allowed; }
+.car-button strong { font-size: 11px; }
+.car-swatch { display: block; width: 18px; height: 30px; justify-self: center; border: 2px solid #26343b; border-radius: 9px 9px 5px 5px; background: var(--car-color); box-shadow: inset 0 8px #d9eef0; }
 .booster-button strong,
 .booster-button span { display: block; overflow-wrap: anywhere; }
 .booster-button strong { font-size: 12px; }

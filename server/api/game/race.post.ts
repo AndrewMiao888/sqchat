@@ -9,8 +9,9 @@ export default defineEventHandler(async event => {
   if (input?.action === 'start') {
     const runId = nextRunId()
     const profile = await loadGameProfile(user.id)
+    const level = cleanInt(input?.level, 1, profile.level)
     await db`INSERT INTO sq_game_races (user_id, seed, run_id, distance, score, level, status, updated_at)
-      VALUES (${user.id}, ${seed}, ${runId}, 0, 0, ${profile.level}, 'racing', NOW())
+      VALUES (${user.id}, ${seed}, ${runId}, 0, 0, ${level}, 'racing', NOW())
       ON CONFLICT (user_id) DO UPDATE SET seed = EXCLUDED.seed, run_id = EXCLUDED.run_id, distance = 0, score = 0, level = EXCLUDED.level, status = 'racing', updated_at = NOW()`
     await signalGame()
     return { runId, seed }
