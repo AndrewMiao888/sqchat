@@ -19,9 +19,10 @@ export default defineEventHandler(async event => {
       throw createError({ statusCode: 403, statusMessage: 'This request must come from SQ Chat.' })
     }
     if (!getHeader(event, 'content-type')?.startsWith('application/json')) throw createError({ statusCode: 415, statusMessage: 'JSON is required.' })
-    if (Number(getHeader(event, 'content-length') || 0) > 16384) throw createError({ statusCode: 413, statusMessage: 'Request is too large.' })
+    const maxBody = path === '/api/messages' ? 262144 : 16384
+    if (Number(getHeader(event, 'content-length') || 0) > maxBody) throw createError({ statusCode: 413, statusMessage: 'Request is too large.' })
     const raw = await readRawBody(event)
-    if (raw && Buffer.byteLength(raw) > 16384) throw createError({ statusCode: 413, statusMessage: 'Request is too large.' })
+    if (raw && Buffer.byteLength(raw) > maxBody) throw createError({ statusCode: 413, statusMessage: 'Request is too large.' })
   }
   if (anonymous.has(path)) {
     if (mutation) await rateLimit(`auth-ip:${clientKey(event)}`, 60, 600)
@@ -31,6 +32,6 @@ export default defineEventHandler(async event => {
   const auth = await requireAuth(event)
   if (mutation) {
     checkCsrf(event, auth)
-    await rateLimit(`writes:${auth.user.id}`, 90, 60)
+    if (!['/api/messages', '/api/attachments/prepare'].includes(path)) await rateLimit(`writes:${auth.user.id}`, 90, 60)
   }
 })

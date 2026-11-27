@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { purgeExpiredSetupCodes } from '../../utils/setupCodes'
 import { dispatchDueReminders } from '../../utils/automaticReminders'
+import { purgeExpiredMessages } from '../../utils/chat'
 
 export default defineEventHandler(async event => {
   const expected = process.env.CRON_SECRET || ''
@@ -11,5 +12,6 @@ export default defineEventHandler(async event => {
   }
   await purgeExpiredSetupCodes()
   const remindersSent = await dispatchDueReminders()
-  return { ok: true, remindersSent }
+  const messagesDeleted = await purgeExpiredMessages()
+  return { ok: true, remindersSent, messagesDeleted }
 })

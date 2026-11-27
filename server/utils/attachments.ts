@@ -11,7 +11,7 @@ export async function accessibleAttachment(user: Account, id: string, ownerOnly 
   if (file.status !== 'attached') {
     if (file.owner_id !== user.id) throw createError({ statusCode: 404, statusMessage: 'File not found.' })
   } else {
-    const parent = file.thread_id ? await db`SELECT id FROM sq_private_messages WHERE id = ${file.message_id}` : await db`SELECT id FROM chat_messages WHERE id = ${file.message_id}`
+    const parent = file.thread_id ? await db`SELECT id FROM sq_private_messages WHERE id = ${file.message_id} AND (expires_at IS NULL OR expires_at > NOW())` : await db`SELECT id FROM chat_messages WHERE id = ${file.message_id} AND (expires_at IS NULL OR expires_at > NOW())`
     if (!parent.length) throw createError({ statusCode: 404, statusMessage: 'File not found.' })
     if (file.thread_id) await findThread(user, file.thread_id)
     else if (user.privateOnly) throw createError({ statusCode: 404, statusMessage: 'File not found.' })

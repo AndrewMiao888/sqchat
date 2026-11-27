@@ -10,7 +10,9 @@ export interface MessageEffects {
   screen?: ScreenEffect
 }
 export interface Attachment { id: string; name: string; type: string; size: number }
-export const MAX_FILE_SIZE = 20 * 1024 * 1024
+export const OVERSIZE_MESSAGE_THRESHOLD = 1000
+export const OVERSIZE_FILE_THRESHOLD = 20 * 1024 * 1024
+export const MAX_FILE_SIZE = 500 * 1024 * 1024
 export const MAX_ATTACHMENTS = 4
 export const VOICE_RECORDING_TYPES: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg' }
 export const FILE_TYPES: Record<string, string> = {

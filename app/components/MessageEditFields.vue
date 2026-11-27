@@ -26,7 +26,7 @@ function bodyChanged() { effects.value = { ...effects.value, text: [] } }
 </script>
 <template>
   <div class="message-edit-fields">
-    <textarea ref="textarea" v-model="body" maxlength="1000" rows="3" aria-label="Edit message" @input="bodyChanged" @select="captureSelection" @keyup="captureSelection" @mouseup="captureSelection"></textarea>
+    <textarea ref="textarea" v-model="body" rows="3" aria-label="Edit message" @input="bodyChanged" @select="captureSelection" @keyup="captureSelection" @mouseup="captureSelection"></textarea>
     <p class="field-help">Select words before choosing a text effect, or apply it to the whole message. Changing the text clears word effects.</p>
     <div class="edit-effect-grid">
       <label>Text effect<select :value="''" :disabled="!body.trim()" @change="setTextEffect(($event.target as HTMLSelectElement).value as TextEffect); ($event.target as HTMLSelectElement).value = ''"><option value="">Add a text effect…</option><option v-for="effect in TEXT_EFFECTS" :key="effect" :value="effect">{{ effect }}</option></select></label>

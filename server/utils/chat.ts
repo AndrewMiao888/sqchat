@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { del } from '@vercel/blob'
-import type { MessageEffects } from '#shared/types/media'
+import { OVERSIZE_FILE_THRESHOLD, OVERSIZE_MESSAGE_THRESHOLD, type MessageEffects } from '#shared/types/media'
 import { store, signal } from './store'
 import type { Account, Conversation } from '#shared/types/auth'
 import { DEFAULT_CONVERSATION_THEME, DEFAULT_SETTINGS, type ChatMessage, type ChatSettings, type ChatState } from '#shared/types/chat'
@@ -32,7 +32,7 @@ export async function findThread(user: Account, id: string, writing = false) {
     )) GROUP BY t.id`
   const row = rows[0]
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Conversation not found.' })
-  const canSend = row.members.some((member: any) => member.id === user.id && member.active) && row.members.filter((member: any) => member.active).length >= 2
+  const canSend = row.members.some((member: any) => member.id === user.id && member.active) && row.members.filter((member: any) => member.active).length >= 1
   if (writing && !canSend) throw createError({ statusCode: 403, statusMessage: 'Only active participants can send messages in this conversation.' })
   return { ...toThread(row), canSend }
 }
@@ -50,9 +50,9 @@ export async function getChatState(user: Account, conversation: string | null = 
   if (thread) await db`INSERT INTO sq_thread_views (user_id, thread_id, last_viewed) VALUES (${user.id}, ${conversation}, NOW()) ON CONFLICT (user_id, thread_id) DO UPDATE SET last_viewed = NOW()`
   const [rows, settings, members, threads, reminderSettings, themeRows] = await Promise.all([
     thread ? db`SELECT m.*, m.created_at::text AS cursor_at, u.name AS sender FROM (
-      SELECT * FROM sq_private_messages WHERE thread_id = ${thread.id} AND (${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''})) ORDER BY created_at DESC, id DESC LIMIT 201
+      SELECT * FROM sq_private_messages WHERE thread_id = ${thread.id} AND (expires_at IS NULL OR expires_at > NOW()) AND (${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''})) ORDER BY created_at DESC, id DESC LIMIT 201
     ) m JOIN sq_users u ON u.id = m.sender_id ORDER BY m.created_at, m.id`
-      : user.privateOnly ? Promise.resolve([]) : db`SELECT m.*, m.created_at::text AS cursor_at FROM (SELECT * FROM chat_messages WHERE ${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''}) ORDER BY created_at DESC, id DESC LIMIT 201) m ORDER BY created_at, id`,
+      : user.privateOnly ? Promise.resolve([]) : db`SELECT m.*, m.created_at::text AS cursor_at FROM (SELECT * FROM chat_messages WHERE (expires_at IS NULL OR expires_at > NOW()) AND (${!before} OR (created_at, id) < (${before?.at || '9999-12-31'}::timestamptz, ${before?.id || ''})) ORDER BY created_at DESC, id DESC LIMIT 201) m ORDER BY created_at, id`,
     db`SELECT data FROM chat_settings WHERE id = TRUE`,
     db`SELECT id, name, private_only FROM sq_users WHERE status = 'active' ORDER BY builtin DESC, created_at, name`,
     db`SELECT t.*,
@@ -131,14 +131,16 @@ export async function addMessage(user: Account, body: string, conversation: stri
     if (!parent.length) throw createError({ statusCode: 400, statusMessage: 'The message you are replying to is no longer in this conversation.' })
   }
   const id = randomUUID()
+  const attachmentRows = attachments.length ? await db`SELECT id, size FROM sq_attachments WHERE id = ANY(${attachments}::text[])` : []
+  const expiresAt = body.length > OVERSIZE_MESSAGE_THRESHOLD || attachmentRows.some(file => Number(file.size) > OVERSIZE_FILE_THRESHOLD) ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null
   let rows: any[]
   if (conversation) {
     rows = await db`WITH valid AS (
       SELECT id FROM sq_attachments WHERE id = ANY(${attachments}::text[]) AND owner_id = ${user.id}
         AND thread_id = ${conversation} AND status = 'ready' AND purpose = 'message' AND message_id IS NULL FOR UPDATE
     ), changed AS (
-      INSERT INTO sq_private_messages (id, thread_id, sender_id, body, effects, reply_to)
-      SELECT ${id}, ${conversation}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo} WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id, thread_id
+      INSERT INTO sq_private_messages (id, thread_id, sender_id, body, effects, reply_to, expires_at)
+      SELECT ${id}, ${conversation}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo}, ${expiresAt} WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id, thread_id
     ), linked AS (UPDATE sq_attachments SET message_id = ${id}, status = 'attached' WHERE id IN (SELECT id FROM valid) AND EXISTS (SELECT 1 FROM changed)),
     signal AS (SELECT pg_notify('sqchat_changes', json_build_object('users', array_agg(m.user_id), 'conversation', ${conversation}::text)::text)
       FROM changed JOIN sq_thread_members m ON m.thread_id = changed.thread_id HAVING COUNT(*) > 0)
@@ -148,7 +150,7 @@ export async function addMessage(user: Account, body: string, conversation: stri
       SELECT id FROM sq_attachments WHERE id = ANY(${attachments}::text[]) AND owner_id = ${user.id}
         AND thread_id IS NULL AND status = 'ready' AND purpose = 'message' AND message_id IS NULL FOR UPDATE
     ), changed AS (
-      INSERT INTO chat_messages (id, sender, sender_id, body, effects, reply_to) SELECT ${id}, ${user.name}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo}
+      INSERT INTO chat_messages (id, sender, sender_id, body, effects, reply_to, expires_at) SELECT ${id}, ${user.name}, ${user.id}, ${body}, ${JSON.stringify(effects)}::jsonb, ${replyTo}, ${expiresAt}
       WHERE (SELECT COUNT(*) FROM valid) = ${attachments.length} RETURNING id
     ), linked AS (UPDATE sq_attachments SET message_id = ${id}, status = 'attached' WHERE id IN (SELECT id FROM valid) AND EXISTS (SELECT 1 FROM changed)),
     signal AS (SELECT pg_notify('sqchat_changes', json_build_object('conversation', NULL)::text) FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
@@ -156,16 +158,25 @@ export async function addMessage(user: Account, body: string, conversation: stri
   if (!rows.length) throw createError({ statusCode: 409, statusMessage: 'One of these files is not ready, belongs to another chat, or has already been sent.' })
   return { id }
 }
+export async function purgeExpiredMessages(limit = 100) {
+  const db = await store()
+  const shared = await db`DELETE FROM chat_messages WHERE id IN (SELECT id FROM chat_messages WHERE expires_at <= NOW() ORDER BY expires_at LIMIT ${limit}) RETURNING id`
+  const privateRows = await db`DELETE FROM sq_private_messages WHERE id IN (SELECT id FROM sq_private_messages WHERE expires_at <= NOW() ORDER BY expires_at LIMIT ${limit}) RETURNING id`
+  await Promise.allSettled([...shared, ...privateRows].map(row => deleteMessageFiles(row.id)))
+  if (shared.length || privateRows.length) await signal()
+  return shared.length + privateRows.length
+}
 export async function updateMessage(id: string, body: string, user: Account, effects?: MessageEffects) {
   const db = await store()
   const replacement = effects === undefined ? null : JSON.stringify(effects)
+  const expiresAt = body.length > OVERSIZE_MESSAGE_THRESHOLD ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null
   const rows = await db`WITH changed AS (
-    UPDATE chat_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END WHERE id = ${id}
+    UPDATE chat_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END, expires_at = COALESCE(expires_at, ${expiresAt}) WHERE id = ${id}
     AND (${user.role === 'admin'} OR (${!user.privateOnly} AND (${user.canModerateMessages} OR sender_id = ${user.id} OR (sender_id IS NULL AND sender = ${user.name})))) RETURNING id
   ), signal AS (SELECT pg_notify('sqchat_changes', 'change') FROM changed) SELECT changed.id FROM changed CROSS JOIN signal`
   if (rows.length) return { id }
   const privateRows = await db`WITH changed AS (
-    UPDATE sq_private_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END WHERE id = ${id}
+    UPDATE sq_private_messages SET body = ${body}, edited_at = NOW(), effects = CASE WHEN ${replacement}::text IS NULL THEN effects - 'text' ELSE ${replacement}::jsonb END, expires_at = COALESCE(expires_at, ${expiresAt}) WHERE id = ${id}
     AND (${user.role === 'admin'} OR ((${user.canModerateMessages} OR sender_id = ${user.id}) AND EXISTS (
       SELECT 1 FROM sq_thread_members m WHERE m.thread_id = sq_private_messages.thread_id AND m.user_id = ${user.id}
     ))) RETURNING id, thread_id

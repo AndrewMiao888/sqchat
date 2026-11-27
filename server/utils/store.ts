@@ -107,7 +107,9 @@ export async function store() {
     await Promise.all([
       db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sender_id TEXT`,
       db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
       db`ALTER TABLE sq_private_messages ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      db`ALTER TABLE sq_private_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
       db`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to TEXT`,
       db`ALTER TABLE sq_private_messages ADD COLUMN IF NOT EXISTS reply_to TEXT`,
       db`CREATE TABLE IF NOT EXISTS sq_attachments (
@@ -130,6 +132,8 @@ export async function store() {
     await db`CREATE INDEX IF NOT EXISTS sq_attachments_message ON sq_attachments(message_id)`
     await Promise.all([
       db`CREATE INDEX IF NOT EXISTS sq_private_timeline ON sq_private_messages(thread_id, created_at DESC, id DESC)`,
+      db`CREATE INDEX IF NOT EXISTS sq_private_expiry ON sq_private_messages(expires_at) WHERE expires_at IS NOT NULL`,
+      db`CREATE INDEX IF NOT EXISTS chat_message_expiry ON chat_messages(expires_at) WHERE expires_at IS NOT NULL`,
       db`CREATE INDEX IF NOT EXISTS sq_sessions_user ON sq_sessions(user_id)`,
       db`CREATE INDEX IF NOT EXISTS sq_invites_user ON sq_invites(user_id)`,
       db`CREATE INDEX IF NOT EXISTS sq_audit_timeline ON sq_audit(created_at DESC)`,
@@ -172,6 +176,12 @@ export async function store() {
     await db`INSERT INTO sq_users (id, name, name_key)
       SELECT 'legacy-' || name_key, name, name_key FROM chat_people
       ON CONFLICT (name_key) DO NOTHING`
+    await db`INSERT INTO sq_threads (id, title, created_by)
+      SELECT 'self-' || id, 'Notes', id FROM sq_users WHERE status = 'active'
+      ON CONFLICT (id) DO NOTHING`
+    await db`INSERT INTO sq_thread_members (thread_id, user_id)
+      SELECT 'self-' || id, id FROM sq_users WHERE status = 'active'
+      ON CONFLICT (thread_id, user_id) DO NOTHING`
   })().catch(error => { ready = undefined; throw error })
   await ready
   return db
