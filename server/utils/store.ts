@@ -177,8 +177,10 @@ export async function store() {
       SELECT 'legacy-' || name_key, name, name_key FROM chat_people
       ON CONFLICT (name_key) DO NOTHING`
     await db`INSERT INTO sq_threads (id, title, created_by)
-      SELECT 'self-' || id, 'Notes', id FROM sq_users WHERE status = 'active'
+      SELECT 'self-' || id, name || '''s Notes', id FROM sq_users WHERE status = 'active'
       ON CONFLICT (id) DO NOTHING`
+    await db`UPDATE sq_threads t SET title = u.name || '''s Notes'
+      FROM sq_users u WHERE t.id = 'self-' || u.id AND t.title = 'Notes'`
     await db`INSERT INTO sq_thread_members (thread_id, user_id)
       SELECT 'self-' || id, id FROM sq_users WHERE status = 'active'
       ON CONFLICT (thread_id, user_id) DO NOTHING`

@@ -10,8 +10,9 @@ export default defineEventHandler(async event => {
   if (input?.includeSelf === false && user.role !== 'admin') throw createError({ statusCode: 403, statusMessage: 'Only Andrew can create chats without joining them.' })
   const ids = [...new Set<string>([...(input?.includeSelf === false ? [] : [user.id]), ...(Array.isArray(input?.userIds) ? input.userIds.filter((id: unknown) => typeof id === 'string') : [])])]
   if (ids.length < 1 || ids.length > 24) throw createError({ statusCode: 400, statusMessage: 'Choose up to 24 people per chat.' })
-  const title = input?.title ? cleanText(input.title, 70) : ''
-  if (title === null) throw createError({ statusCode: 400, statusMessage: 'Keep the conversation name under 70 characters.' })
+  const requestedTitle = input?.title ? cleanText(input.title, 70) : ''
+  if (requestedTitle === null) throw createError({ statusCode: 400, statusMessage: 'Keep the conversation name under 70 characters.' })
+  const title = ids.length === 1 && !requestedTitle ? `${user.name}'s Notes` : requestedTitle
   const db = await store()
   const users = await db`SELECT id FROM sq_users WHERE id = ANY(${ids}::text[]) AND status = 'active'`
   if (users.length !== ids.length) throw createError({ statusCode: 400, statusMessage: 'Choose active members only.' })
