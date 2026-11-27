@@ -16,12 +16,6 @@ export default defineEventHandler(async event => {
   const db = await store()
   const users = await db`SELECT id FROM sq_users WHERE id = ANY(${ids}::text[]) AND status = 'active'`
   if (users.length !== ids.length) throw createError({ statusCode: 400, statusMessage: 'Choose active members only.' })
-  // Reuse an existing direct conversation. Group conversations can have their own names.
-  if (ids.length <= 2) {
-    const existing = await db`SELECT thread_id AS id FROM sq_thread_members GROUP BY thread_id
-      HAVING COUNT(*) = ${ids.length} AND bool_and(user_id = ANY(${ids}::text[])) LIMIT 1`
-    if (existing[0]) return { id: existing[0].id }
-  }
   if (user.role !== 'admin' && !(await db`SELECT chat_auto_approve FROM sq_users WHERE id = ${user.id}`)[0]?.chat_auto_approve) {
     const requestId = randomUUID()
     await db`INSERT INTO sq_chat_requests (id, requester_id, kind, title, user_ids)
